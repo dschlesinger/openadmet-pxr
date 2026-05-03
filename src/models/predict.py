@@ -16,7 +16,7 @@ def _generate(
     train_path: Path,
     test_path: Path,
     model_name: str,
-    input_name: str,
+    input_names: list[str],
     target: str,
     output_path: Path,
     cache_dir: Path,
@@ -24,8 +24,9 @@ def _generate(
     """Fit model on train data, predict on test data, write submission CSV."""
     if model_name not in REGISTRY:
         raise ValueError(f"Unknown model: {model_name!r}. Available: {list(REGISTRY.keys())}")
-    if input_name not in INPUT_REGISTRY:
-        raise ValueError(f"Unknown input: {input_name!r}. Available: {list(INPUT_REGISTRY.keys())}")
+    unknown = [n for n in input_names if n not in INPUT_REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown input(s): {unknown}. Available: {list(INPUT_REGISTRY.keys())}")
 
     train_df = pl.read_csv(train_path)
     if target not in train_df.columns:
@@ -33,9 +34,9 @@ def _generate(
 
     test_df = pl.read_csv(test_path)
 
-    X_train, y_train = drop_nan_rows(featurize(train_df, input_name, cache_dir), train_df[target].to_numpy(), label="train")
+    X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train")
 
-    X_test_raw = featurize(test_df, input_name, cache_dir)
+    X_test_raw = featurize(test_df, input_names, cache_dir)
     valid_mask = ~np.isnan(X_test_raw).any(axis=1)
     n_dropped = int((~valid_mask).sum())
     if n_dropped > 0:
@@ -67,8 +68,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--input",
-        default="morgan",
-        help=f"Input featurization to use. Available: {list(INPUT_REGISTRY.keys())}",
+        nargs="+",
+        default=["morgan"],
+        help=f"Input featurization(s) to use (hstacked if multiple). Available: {list(INPUT_REGISTRY.keys())}",
     )
     parser.add_argument("--target", default="pEC50", help="Target column in training data")
     parser.add_argument("--output", default=None, help="Output CSV path (default: results/<model>.csv)")
@@ -82,7 +84,7 @@ def main() -> None:
             Path(args.train_path),
             Path(args.test_path),
             args.model,
-            args.input,
+            args.input,  # now a list[str]
             args.target,
             output,
             Path(args.cache_dir),

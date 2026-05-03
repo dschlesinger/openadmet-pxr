@@ -22,14 +22,9 @@ def _rdkit_features(df: pl.DataFrame) -> np.ndarray:
     return _rdkit.transform(df["SMILES"])
 
 
-def _rdkit_morgan_features(df: pl.DataFrame) -> np.ndarray:
-    return np.hstack([_rdkit_features(df), _morgan_features(df)])
-
-
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     "morgan": _morgan_features,
     "rdkit": _rdkit_features,
-    "rdkit+morgan": _rdkit_morgan_features,
 }
 
 
@@ -39,27 +34,31 @@ def _cache_key(smiles: pl.Series) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-def featurize(
-    df: pl.DataFrame,
-    input_name: str,
-    cache_dir: Path = Path("data/features"),
-) -> np.ndarray:
-    """Return feature matrix for df, loading from cache when available.
-
-    On a cache miss the features are computed (with a tqdm bar) and saved so
-    that subsequent calls with the same SMILES and input_name are instant.
-    """
-    if input_name not in INPUT_REGISTRY:
-        raise ValueError(f"Unknown input: {input_name!r}. Available: {list(INPUT_REGISTRY.keys())}")
-
+def _featurize_one(df: pl.DataFrame, input_name: str, cache_dir: Path) -> np.ndarray:
     cache_path = cache_dir / f"{input_name}_{_cache_key(df['SMILES'])}.npy"
-
     if cache_path.exists():
         print(f"Loading cached {input_name} features from {cache_path}")
         return np.load(str(cache_path))
-
     features = INPUT_REGISTRY[input_name](df)
     cache_dir.mkdir(parents=True, exist_ok=True)
     np.save(str(cache_path), features)
     print(f"Saved {input_name} features to {cache_path}")
     return features
+
+
+def featurize(
+    df: pl.DataFrame,
+    input_names: str | list[str],
+    cache_dir: Path = Path("data/features"),
+) -> np.ndarray:
+    """Return feature matrix for df, loading each input from cache when available.
+
+    Pass a single name or a list; multiple inputs are hstacked after loading
+    each from its own cache file.
+    """
+    names = [input_names] if isinstance(input_names, str) else input_names
+    unknown = [n for n in names if n not in INPUT_REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown input(s): {unknown}. Available: {list(INPUT_REGISTRY.keys())}")
+    arrays = [_featurize_one(df, name, cache_dir) for name in names]
+    return arrays[0] if len(arrays) == 1 else np.hstack(arrays)

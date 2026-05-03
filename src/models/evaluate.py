@@ -49,10 +49,11 @@ def _resolve_models(names: list[str]) -> list[type[PXRModel]]:
     return [REGISTRY[n] for n in names]
 
 
-def _resolve_input(name: str) -> None:
-    """Raise ValueError if name is not in INPUT_REGISTRY."""
-    if name not in INPUT_REGISTRY:
-        raise ValueError(f"Unknown input: {name!r}. Available: {list(INPUT_REGISTRY.keys())}")
+def _resolve_inputs(names: list[str]) -> None:
+    """Raise ValueError if any name is not in INPUT_REGISTRY."""
+    unknown = [n for n in names if n not in INPUT_REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown input(s): {unknown}. Available: {list(INPUT_REGISTRY.keys())}")
 
 
 def _print_results(results: list[tuple[str, dict[str, float]]]) -> None:
@@ -74,8 +75,9 @@ def main() -> None:
     parser.add_argument("--target", default="pEC50", help="Target column to predict")
     parser.add_argument(
         "--input",
-        default="morgan",
-        help=f"Input featurization to use. Available: {list(INPUT_REGISTRY.keys())}",
+        nargs="+",
+        default=["morgan"],
+        help=f"Input featurization(s) to use (hstacked if multiple). Available: {list(INPUT_REGISTRY.keys())}",
     )
     parser.add_argument("--cache-dir", default="data/features", help="Directory for cached feature matrices")
     parser.add_argument("--sort-by", default="MAE", choices=["MAE", "RMSE", "R2"], help="Metric to sort results by")
@@ -87,7 +89,7 @@ def main() -> None:
 
     try:
         model_classes = _resolve_models(args.models)
-        _resolve_input(args.input)
+        _resolve_inputs(args.input)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
