@@ -1,13 +1,13 @@
 [build-system]
-requires = ["flit_core >=2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name =  "py-project-toml"
+name =  "openadmet-pxr"
 authors = [
-    {name = "Daniel Ciborowski", email = "dciborow@microsoft.com"},
+    {name = "Denali Schlesinger", email = "dsch28@bu.edu"},
 ]
-description = "Sample Python Project for creating a new Python Module"
+description = "Code for PXR Challenge"
 readme = "README.md"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -20,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11"
 ]
 requires-python = ">=3.8.1"
-dynamic = ["version"]
+dynamic = ["version", "dependencies"]
 
 [project.optional-dependencies]
 spark = [
@@ -46,13 +46,19 @@ test = [
     "shellcheck-py==0.9.0.2"
 ]
 
+[project.scripts]
+download-data = "data_tools.download:main"
+
 [project.urls]
 Documentation = "https://github.com/microsoft/python-package-template/tree/main#readme"
 Source = "https://github.com/microsoft/python-package-template"
 Tracker = "https://github.com/microsoft/python-package-template/issues"
 
-[tool.flit.module]
-name = "python_package"
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.bandit]
 exclude_dirs = ["build","dist","tests","scripts"]
