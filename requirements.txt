@@ -1,2 +1,9 @@
 # Main project dependencies
 polars
+pyarrow
+
+# EDA / visualisation
+matplotlib
+seaborn
+scipy
+rdkit
