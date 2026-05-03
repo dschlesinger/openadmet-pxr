@@ -16,6 +16,7 @@ from models.evaluate import (
     _split_data,
     main,
 )
+from models.predict import _generate, main as predict_main
 
 
 @pytest.fixture()
@@ -190,4 +191,103 @@ def test_main_missing_target(monkeypatch: pytest.MonkeyPatch, tmp_path: object, 
     monkeypatch.setattr(sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--target", "no_column"])
     with pytest.raises(SystemExit) as exc:
         main()
+    assert exc.value.code == 1
+
+
+# --- predict._generate ---
+
+
+@pytest.fixture()
+def predict_dfs(tmp_path: object) -> tuple[object, object]:
+    train = pl.DataFrame({"Molecule Name": ["A", "B", "C"], "SMILES": ["C", "CC", "CCC"], "pEC50": [5.0, 6.0, 7.0]})
+    test = pl.DataFrame({"Molecule Name": ["D", "E"], "SMILES": ["CCCC", "CCCCC"]})
+    train_path = tmp_path / "train.csv"  # type: ignore[operator]
+    test_path = tmp_path / "test.csv"  # type: ignore[operator]
+    train.write_csv(train_path)
+    test.write_csv(test_path)
+    return train_path, test_path
+
+
+def test_generate_writes_csv(tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+    train_path, test_path = predict_dfs
+    out = tmp_path / "out.csv"  # type: ignore[operator]
+    from pathlib import Path
+
+    result = _generate(Path(str(train_path)), Path(str(test_path)), "mean_baseline", "pEC50", Path(str(out)))
+    assert out.exists()  # type: ignore[union-attr]
+    assert "Molecule Name" in result.columns
+    assert "SMILES" in result.columns
+    assert "pEC50" in result.columns
+    assert len(result) == 2
+
+
+def test_generate_unknown_model(tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+    train_path, test_path = predict_dfs
+    from pathlib import Path
+
+    with pytest.raises(ValueError, match="Unknown model"):
+        _generate(Path(str(train_path)), Path(str(test_path)), "no_such_model", "pEC50", Path(str(tmp_path / "out.csv")))  # type: ignore[operator]
+
+
+def test_generate_missing_target(tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+    train_path, test_path = predict_dfs
+    from pathlib import Path
+
+    with pytest.raises(ValueError, match="Target"):
+        _generate(Path(str(train_path)), Path(str(test_path)), "mean_baseline", "no_col", Path(str(tmp_path / "out.csv")))  # type: ignore[operator]
+
+
+# --- predict_main ---
+
+
+def test_predict_main_explicit_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object], capsys: pytest.CaptureFixture[str]
+) -> None:
+    train_path, test_path = predict_dfs
+    out = tmp_path / "result.csv"  # type: ignore[operator]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path), "--output", str(out)],
+    )
+    predict_main()
+    assert out.exists()  # type: ignore[union-attr]
+    assert "Wrote" in capsys.readouterr().out
+
+
+def test_predict_main_default_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object], capsys: pytest.CaptureFixture[str]
+) -> None:
+    train_path, test_path = predict_dfs
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path)],
+    )
+    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
+    predict_main()
+    assert "Wrote" in capsys.readouterr().out
+
+
+def test_predict_main_unknown_model(monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+    train_path, test_path = predict_dfs
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path), "--model", "no_model"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        predict_main()
+    assert exc.value.code == 1
+
+
+def test_predict_main_missing_target(monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+    train_path, test_path = predict_dfs
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path), "--target", "no_col"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        predict_main()
     assert exc.value.code == 1
