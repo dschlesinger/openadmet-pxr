@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
-import polars as pl
+import numpy as np
 
 
 class PXRModel(ABC):
@@ -12,9 +12,9 @@ class PXRModel(ABC):
     name: ClassVar[str] = "base"
 
     @abstractmethod
-    def fit(self, train: pl.DataFrame, target: str) -> None:
-        """Fit the model on training data."""
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """Fit the model on feature matrix X and target vector y."""
 
     @abstractmethod
-    def predict(self, data: pl.DataFrame) -> pl.Series:
-        """Return predictions for every row in data."""
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Return predictions for every row in X."""

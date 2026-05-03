@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-import polars as pl
+import numpy as np
 
 from models.base import PXRModel
 
@@ -15,12 +15,11 @@ class MeanBaseline(PXRModel):
     def __init__(self) -> None:
         self._mean: float = 0.0
 
-    def fit(self, train: pl.DataFrame, target: str) -> None:
-        val = train[target].mean()
-        self._mean = float(val) if val is not None else 0.0
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        self._mean = float(y.mean()) if len(y) > 0 else 0.0
 
-    def predict(self, data: pl.DataFrame) -> pl.Series:
-        return pl.Series("prediction", [self._mean] * len(data))
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        return np.full(len(X), self._mean)
 
 
 class MedianBaseline(PXRModel):
@@ -31,9 +30,8 @@ class MedianBaseline(PXRModel):
     def __init__(self) -> None:
         self._median: float = 0.0
 
-    def fit(self, train: pl.DataFrame, target: str) -> None:
-        val = train[target].median()
-        self._median = float(val) if val is not None else 0.0
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        self._median = float(np.median(y)) if len(y) > 0 else 0.0
 
-    def predict(self, data: pl.DataFrame) -> pl.Series:
-        return pl.Series("prediction", [self._median] * len(data))
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        return np.full(len(X), self._median)

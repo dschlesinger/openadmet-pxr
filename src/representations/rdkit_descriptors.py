@@ -6,6 +6,7 @@ import numpy as np
 import polars as pl
 from rdkit import Chem
 from rdkit.Chem import Descriptors
+from tqdm import tqdm
 
 from representations.base import Representation
 
@@ -29,7 +30,7 @@ class RDKitDescriptors(Representation):
         """Return a (n_molecules, 217) float64 array of RDKit descriptors."""
         n_desc = len(_DESC_FUNCS)
         out = np.full((len(smiles), n_desc), np.nan, dtype=np.float64)
-        for i, smi in enumerate(smiles.to_list()):
+        for i, smi in enumerate(tqdm(smiles.to_list(), desc="RDKit descriptors", unit="mol", leave=True)):
             mol = Chem.MolFromSmiles(smi)
             if mol is not None:
                 out[i] = [func(mol) for _, func in _DESC_FUNCS]

@@ -6,6 +6,7 @@ import numpy as np
 import polars as pl
 from rdkit import Chem
 from rdkit.Chem import AllChem
+from tqdm import tqdm
 
 from representations.base import Representation
 
@@ -25,7 +26,7 @@ class MorganFingerprint(Representation):
     def transform(self, smiles: pl.Series) -> np.ndarray:
         """Return a (n_molecules, n_bits) uint8 array of Morgan fingerprints."""
         out = np.zeros((len(smiles), self.n_bits), dtype=np.uint8)
-        for i, smi in enumerate(smiles.to_list()):
+        for i, smi in enumerate(tqdm(smiles.to_list(), desc="Morgan fingerprints", unit="mol", leave=True)):
             mol = Chem.MolFromSmiles(smi)
             if mol is not None:
                 fp = AllChem.GetMorganFingerprintAsBitVect(mol, self.radius, nBits=self.n_bits)
