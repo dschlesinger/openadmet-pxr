@@ -48,6 +48,7 @@ test = [
 
 [project.scripts]
 download-data = "data_tools.download:main"
+evaluate-models = "models.evaluate:main"
 
 [project.urls]
 Documentation = "https://github.com/microsoft/python-package-template/tree/main#readme"
