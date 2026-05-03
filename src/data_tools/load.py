@@ -7,6 +7,7 @@ import polars as pl
 _DEFAULT_DATA_DIR = Path("data")
 _TRAIN_FILE = "train.csv"
 _TEST_FILE = "test.csv"
+_COUNTER_TRAIN_FILE = "counter_train.csv"
 
 
 def load_train(path: Path = _DEFAULT_DATA_DIR / _TRAIN_FILE) -> pl.DataFrame:
@@ -16,6 +17,11 @@ def load_train(path: Path = _DEFAULT_DATA_DIR / _TRAIN_FILE) -> pl.DataFrame:
 
 def load_test(path: Path = _DEFAULT_DATA_DIR / _TEST_FILE) -> pl.DataFrame:
     """Return the test split as a Polars DataFrame."""
+    return pl.read_csv(path)
+
+
+def load_counter_train(path: Path = _DEFAULT_DATA_DIR / _COUNTER_TRAIN_FILE) -> pl.DataFrame:
+    """Return the counter-assay training split as a Polars DataFrame."""
     return pl.read_csv(path)
 
 
