@@ -4,10 +4,12 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from models import REGISTRY
+from models.utils import drop_nan_rows
 
 
 def _generate(
@@ -31,11 +33,21 @@ def _generate(
 
     test_df = pl.read_csv(test_path)
 
-    model = REGISTRY[model_name]()
-    model.fit(featurize(train_df, input_name, cache_dir), train_df[target].to_numpy())
-    preds = model.predict(featurize(test_df, input_name, cache_dir))
+    X_train, y_train = drop_nan_rows(featurize(train_df, input_name, cache_dir), train_df[target].to_numpy(), label="train")
 
-    result = test_df.select(["Molecule Name", "SMILES"]).with_columns(pl.Series(target, preds.tolist()))
+    X_test_raw = featurize(test_df, input_name, cache_dir)
+    valid_mask = ~np.isnan(X_test_raw).any(axis=1)
+    n_dropped = int((~valid_mask).sum())
+    if n_dropped > 0:
+        print(f"Dropped {n_dropped} of {len(test_df)} test molecules with NaN features")
+    X_test = X_test_raw[valid_mask]
+    test_df_clean = test_df.filter(pl.Series(valid_mask.tolist()))
+
+    model = REGISTRY[model_name]()
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+
+    result = test_df_clean.select(["Molecule Name", "SMILES"]).with_columns(pl.Series(target, preds.tolist()))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.write_csv(output_path)

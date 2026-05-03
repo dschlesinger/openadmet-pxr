@@ -5,7 +5,7 @@ from typing import ClassVar
 import numpy as np
 import polars as pl
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import rdFingerprintGenerator
 from tqdm import tqdm
 
 from representations.base import Representation
@@ -22,6 +22,7 @@ class MorganFingerprint(Representation):
     def __init__(self, radius: int = 2, n_bits: int = 2048) -> None:
         self.radius = radius
         self.n_bits = n_bits
+        self._generator = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=n_bits)
 
     def transform(self, smiles: pl.Series) -> np.ndarray:
         """Return a (n_molecules, n_bits) uint8 array of Morgan fingerprints."""
@@ -29,6 +30,6 @@ class MorganFingerprint(Representation):
         for i, smi in enumerate(tqdm(smiles.to_list(), desc="Morgan fingerprints", unit="mol", leave=True)):
             mol = Chem.MolFromSmiles(smi)
             if mol is not None:
-                fp = AllChem.GetMorganFingerprintAsBitVect(mol, self.radius, nBits=self.n_bits)
-                out[i] = np.frombuffer(fp.ToBitString().encode(), dtype=np.uint8) - ord("0")
+                fp = self._generator.GetFingerprintAsNumPy(mol)
+                out[i] = fp
         return out

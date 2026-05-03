@@ -15,7 +15,6 @@ from models.evaluate import (
     _print_results,
     _resolve_input,
     _resolve_models,
-    _split_data,
     main,
 )
 from models.predict import _generate, main as predict_main
@@ -80,20 +79,6 @@ def test_median_baseline_empty_y() -> None:
     model = MedianBaseline()
     model.fit(np.zeros((0, 4)), np.array([]))
     assert model._median == 0.0
-
-
-# --- _split_data ---
-
-
-def test_split_data_sizes(small_df: pl.DataFrame) -> None:
-    train, val = _split_data(small_df, 0.3, seed=42)
-    assert len(train) + len(val) == len(small_df)
-    assert len(val) == 3
-
-
-def test_split_data_no_overlap(small_df: pl.DataFrame) -> None:
-    train, val = _split_data(small_df, 0.2, seed=0)
-    assert set(train["SMILES"].to_list()).isdisjoint(set(val["SMILES"].to_list()))
 
 
 # --- _compute_metrics ---

@@ -9,13 +9,8 @@ import polars as pl
 
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from models import REGISTRY, PXRModel
+from models.utils import drop_nan_rows
 
-
-def _split_data(df: pl.DataFrame, val_fraction: float, seed: int) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Return (train, val) after a reproducible shuffle-split."""
-    shuffled = df.sample(fraction=1.0, shuffle=True, seed=seed)
-    n_val = int(len(shuffled) * val_fraction)
-    return shuffled[n_val:], shuffled[:n_val]
 
 
 def _compute_metrics(actual: pl.Series, predicted: pl.Series) -> dict[str, float]:
@@ -83,6 +78,7 @@ def main() -> None:
         help=f"Input featurization to use. Available: {list(INPUT_REGISTRY.keys())}",
     )
     parser.add_argument("--cache-dir", default="data/features", help="Directory for cached feature matrices")
+    parser.add_argument("--sort-by", default="MAE", choices=["MAE", "RMSE", "R2"], help="Metric to sort results by")
     args = parser.parse_args()
 
     if not 0.0 < args.val_split < 1.0:
@@ -102,14 +98,19 @@ def main() -> None:
         sys.exit(1)
 
     cache_dir = Path(args.cache_dir)
-    train, val = _split_data(df, args.val_split, args.seed)
-    X_train = featurize(train, args.input, cache_dir)
-    y_train = train[args.target].to_numpy()
-    X_val = featurize(val, args.input, cache_dir)
-    y_val = val[args.target].to_numpy()
+    X_all, y_all = drop_nan_rows(featurize(df, args.input, cache_dir), df[args.target].to_numpy())
+
+    rng = np.random.default_rng(args.seed)
+    idx = rng.permutation(len(X_all))
+    n_val = int(len(X_all) * args.val_split)
+    val_idx, train_idx = idx[:n_val], idx[n_val:]
+    X_train, y_train = X_all[train_idx], y_all[train_idx]
+    X_val, y_val = X_all[val_idx], y_all[val_idx]
 
     results = [
         (cls.name, _evaluate_model(cls(), X_train, y_train, X_val, y_val))
         for cls in model_classes
     ]
+    reverse = args.sort_by == "R2"
+    results.sort(key=lambda r: r[1][args.sort_by], reverse=reverse)
     _print_results(results)
