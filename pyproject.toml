@@ -50,6 +50,7 @@ test = [
 download-data = "data_tools.download:main"
 evaluate-models = "models.evaluate:main"
 generate-results = "models.predict:main"
+validate-results = "data_tools.validate_submission:main"
 
 [project.urls]
 Documentation = "https://github.com/microsoft/python-package-template/tree/main#readme"

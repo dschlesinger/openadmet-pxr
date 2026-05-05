@@ -1,8 +1,6 @@
-# Main project dependencies
+pandas
 polars
 pyarrow
-
-# EDA / visualisation
 matplotlib
 seaborn
 scipy
