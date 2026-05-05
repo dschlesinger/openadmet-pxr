@@ -7,11 +7,13 @@ from typing import Callable
 import numpy as np
 import polars as pl
 
+from representations.chemeleon import ChemeleonFingerprint
 from representations.fingerprints import MorganFingerprint
 from representations.rdkit_descriptors import RDKitDescriptors
 
 _morgan = MorganFingerprint()
 _rdkit = RDKitDescriptors()
+_chemeleon = ChemeleonFingerprint()
 
 
 def _morgan_features(df: pl.DataFrame) -> np.ndarray:
@@ -22,9 +24,14 @@ def _rdkit_features(df: pl.DataFrame) -> np.ndarray:
     return _rdkit.transform(df["SMILES"])
 
 
+def _chemeleon_features(df: pl.DataFrame) -> np.ndarray:
+    return _chemeleon.transform(df["SMILES"]).astype(np.float64)
+
+
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     "morgan": _morgan_features,
     "rdkit": _rdkit_features,
+    "chemeleon": _chemeleon_features,
 }
 
 

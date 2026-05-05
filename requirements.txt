@@ -10,3 +10,4 @@ rdkit
 tqdm
 scikit-learn
 xgboost
+chemprop>=2.2.0
