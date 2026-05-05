@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 
@@ -53,7 +54,50 @@ def _generate(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.write_csv(output_path)
     print(f"Wrote {len(result)} rows -> {output_path}")
+    _print_prediction_summary(preds, target)
+    _plot_prediction_distribution(preds, y_train, target, output_path)
     return result
+
+
+def _print_prediction_summary(preds: np.ndarray, target: str) -> None:
+    """Print distribution statistics for the generated predictions."""
+    p = preds.astype(float)
+    percentiles = np.percentile(p, [5, 25, 50, 75, 95])
+    print(f"\nPrediction summary ({target}, n={len(p)}):")
+    print(f"  mean   : {p.mean():.4f}")
+    print(f"  std    : {p.std():.4f}")
+    print(f"  min    : {p.min():.4f}")
+    print(f"  p5     : {percentiles[0]:.4f}")
+    print(f"  p25    : {percentiles[1]:.4f}")
+    print(f"  median : {percentiles[2]:.4f}")
+    print(f"  p75    : {percentiles[3]:.4f}")
+    print(f"  p95    : {percentiles[4]:.4f}")
+    print(f"  max    : {p.max():.4f}")
+
+
+def _plot_prediction_distribution(
+    preds: np.ndarray, y_train: np.ndarray, target: str, output_path: Path
+) -> None:
+    """Save an overlaid density histogram comparing predictions to the training distribution."""
+    p = preds.astype(float)
+    t = y_train.astype(float)
+    all_vals = np.concatenate([p, t])
+    bins = np.linspace(all_vals.min(), all_vals.max(), 31)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.hist(t, bins=bins, density=True, alpha=0.5, label=f"train (n={len(t)}, mean={t.mean():.2f}, std={t.std():.2f})")
+    ax.hist(p, bins=bins, density=True, alpha=0.5, label=f"predicted (n={len(p)}, mean={p.mean():.2f}, std={p.std():.2f})")
+    ax.axvline(t.mean(), color="C0", linestyle="--", linewidth=1.2)
+    ax.axvline(p.mean(), color="C1", linestyle="--", linewidth=1.2)
+    ax.set_xlabel(target)
+    ax.set_ylabel("Density")
+    ax.set_title(f"{target}: predicted vs training distribution")
+    ax.legend()
+    fig.tight_layout()
+    plot_path = output_path.with_suffix(".png")
+    fig.savefig(plot_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved distribution plot -> {plot_path}")
 
 
 def main() -> None:
