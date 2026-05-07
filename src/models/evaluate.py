@@ -68,9 +68,10 @@ def _print_results(results: list[tuple[str, dict[str, float]]]) -> None:
 def main() -> None:
     """Entry point for the evaluate-models CLI."""
     parser = argparse.ArgumentParser(description="Evaluate PXR models on a train/val split.")
-    parser.add_argument("--train-path", default="data/train.csv", help="Path to training CSV")
-    parser.add_argument("--val-split", type=float, default=0.2, help="Fraction of training data held out for validation")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for the shuffle-split")
+    parser.add_argument("--train-path", default="data/train_split.csv", help="Path to training CSV")
+    parser.add_argument("--val-path", type=Path, default=Path("data/val_split.csv"), help="Path to validation CSV")
+    parser.add_argument("--val-split", type=float, default=0.2, help="Fallback val fraction if --val-path not found")
+    parser.add_argument("--seed", type=int, default=42, help="Fallback random seed if --val-path not found")
     parser.add_argument("--models", nargs="+", default=["all"], help="Model names to evaluate, or omit for all")
     parser.add_argument("--target", default="pEC50", help="Target column to predict")
     parser.add_argument(
@@ -94,20 +95,29 @@ def main() -> None:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
 
-    df = pl.read_csv(args.train_path)
-    if args.target not in df.columns:
-        print(f"Target '{args.target}' not found. Columns: {list(df.columns)}", file=sys.stderr)
-        sys.exit(1)
-
     cache_dir = Path(args.cache_dir)
-    X_all, y_all = drop_nan_rows(featurize(df, args.input, cache_dir), df[args.target].to_numpy())
 
-    rng = np.random.default_rng(args.seed)
-    idx = rng.permutation(len(X_all))
-    n_val = int(len(X_all) * args.val_split)
-    val_idx, train_idx = idx[:n_val], idx[n_val:]
-    X_train, y_train = X_all[train_idx], y_all[train_idx]
-    X_val, y_val = X_all[val_idx], y_all[val_idx]
+    train_df = pl.read_csv(args.train_path)
+    if args.target not in train_df.columns:
+        print(f"Target '{args.target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
+        sys.exit(1)
+    X_train, y_train = drop_nan_rows(featurize(train_df, args.input, cache_dir), train_df[args.target].to_numpy())
+
+    if args.val_path.exists():
+        val_df = pl.read_csv(args.val_path)
+        X_val, y_val = drop_nan_rows(featurize(val_df, args.input, cache_dir), val_df[args.target].to_numpy())
+        print(f"Using {args.val_path}: {len(y_val)} val / {len(y_train)} train molecules", file=sys.stderr)
+    else:
+        print(
+            f"WARNING: {args.val_path} not found — falling back to random split "
+            f"(val_split={args.val_split}, seed={args.seed}). Run download-data first.",
+            file=sys.stderr,
+        )
+        rng = np.random.default_rng(args.seed)
+        idx = rng.permutation(len(X_train))
+        n_val = int(len(X_train) * args.val_split)
+        val_idx, train_idx = idx[:n_val], idx[n_val:]
+        X_train, y_train, X_val, y_val = X_train[train_idx], y_train[train_idx], X_train[val_idx], y_train[val_idx]
 
     results = [
         (cls.name, _evaluate_model(cls(), X_train, y_train, X_val, y_val))
