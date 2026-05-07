@@ -1,4 +1,4 @@
-"""Tests for KNN, DecisionTree, LinearRegression, and XGBoost models."""
+"""Tests for KNN, DecisionTree, LinearRegression, XGBoost, and SymbolicRegression models."""
 from __future__ import annotations
 
 import numpy as np
@@ -13,6 +13,12 @@ from models.decision_tree import (
 )
 from models.knn import DEFAULT_METRIC, DEFAULT_N_NEIGHBORS, DEFAULT_WEIGHTS, KNN
 from models.linear_regression import DEFAULT_ALPHA, DEFAULT_FIT_INTERCEPT, DEFAULT_MAX_ITER, DEFAULT_N_COMPONENTS, LinearRegression
+from models.symbolic_regression import (
+    DEFAULT_NITERATIONS,
+    DEFAULT_POPULATIONS,
+    DEFAULT_RANDOM_STATE,
+    SymbolicRegression,
+)
 from models.xgboost_model import (
     DEFAULT_COLSAMPLE_BYTREE,
     DEFAULT_LEARNING_RATE,
@@ -149,10 +155,37 @@ def test_xgboost_fit_predict(regression_data: tuple[np.ndarray, np.ndarray, np.n
     assert np.isfinite(preds).all()
 
 
+# --- SymbolicRegression ---
+
+
+def test_symbolic_regression_default_params() -> None:
+    model = SymbolicRegression()
+    assert model._model.niterations == DEFAULT_NITERATIONS
+    assert model._model.populations == DEFAULT_POPULATIONS
+    assert model._model.random_state == DEFAULT_RANDOM_STATE
+
+
+def test_symbolic_regression_custom_params() -> None:
+    model = SymbolicRegression(niterations=5, populations=4, random_state=7)
+    assert model._model.niterations == 5
+    assert model._model.populations == 4
+    assert model._model.random_state == 7
+
+
+@pytest.mark.slow
+def test_symbolic_regression_fit_predict(regression_data: tuple[np.ndarray, np.ndarray, np.ndarray]) -> None:
+    X, y, X_test = regression_data
+    model = SymbolicRegression(niterations=2, populations=4)
+    model.fit(X, y)
+    preds = model.predict(X_test)
+    assert preds.shape == (50,)
+    assert np.isfinite(preds).all()
+
+
 # --- registry ---
 
 
 def test_all_new_models_in_registry() -> None:
     from models import REGISTRY
-    for name in ("knn", "decision_tree", "linear_regression", "xgboost"):
+    for name in ("knn", "decision_tree", "linear_regression", "xgboost", "symbolic_regression"):
         assert name in REGISTRY

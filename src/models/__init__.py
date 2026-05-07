@@ -10,6 +10,7 @@ from models.decision_tree import DecisionTree
 from models.knn import KNN
 from models.linear_regression import LinearRegression
 from models.mlp import MLP
+from models.symbolic_regression import SymbolicRegression
 from models.xgboost_model import XGBoost
 
 REGISTRY: dict[str, type[PXRModel]] = {
@@ -19,6 +20,7 @@ REGISTRY: dict[str, type[PXRModel]] = {
     DecisionTree.name: DecisionTree,
     LinearRegression.name: LinearRegression,
     MLP.name: MLP,
+    SymbolicRegression.name: SymbolicRegression,
     XGBoost.name: XGBoost,
 }
 
