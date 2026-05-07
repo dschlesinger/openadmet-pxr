@@ -116,7 +116,7 @@ class FinetunedChemeleonFingerprint(Representation):
 
         datapoints = [data.MoleculeDatapoint.from_smi(s) for s in valid_smiles]
         dset = data.MoleculeDataset(datapoints, self._featurizer)
-        loader = data.build_dataloader(dset, batch_size=self._batch_size, num_workers=self._num_workers, shuffle=False)
+        loader = data.build_dataloader(dset, batch_size=self._batch_size, num_workers=self._num_workers, shuffle=False, drop_last=False)
 
         fps: list[np.ndarray] = []
         with torch.no_grad():
@@ -173,7 +173,7 @@ class ChemeleonFingerprint(Representation):
 
         datapoints = [data.MoleculeDatapoint.from_smi(s) for s in valid_smiles]
         dset = data.MoleculeDataset(datapoints, self._featurizer)
-        loader = data.build_dataloader(dset, batch_size=self._batch_size, num_workers=self._num_workers, shuffle=False)
+        loader = data.build_dataloader(dset, batch_size=self._batch_size, num_workers=self._num_workers, shuffle=False, drop_last=False)
 
         fps: list[np.ndarray] = []
         with torch.no_grad():
