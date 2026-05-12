@@ -3,7 +3,6 @@
 from typing import ClassVar
 
 import numpy as np
-from sklearn.decomposition import PCA
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
@@ -11,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import FunctionTransformer
 
 from models.base import PXRModel
+from models.utils import make_pca
 
 DEFAULT_ALPHA = 1.0
 DEFAULT_FIT_INTERCEPT = True
@@ -33,7 +33,7 @@ class LinearRegression(PXRModel):
         self._model = Pipeline([
             ("variance_threshold", VarianceThreshold(0.0)),
             ("scaler", StandardScaler()),
-            ("pca", PCA(n_components=n_components)),
+            ("pca", make_pca(n_components)),
             ("scale", FunctionTransformer(lambda x: x / n_components)),
             ("ridge", Ridge(alpha=alpha, fit_intercept=fit_intercept, max_iter=max_iter)),
         ])

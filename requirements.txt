@@ -11,3 +11,8 @@ scikit-learn
 xgboost
 chemprop>=2.2.0
 pysr
+tabpfn
+
+# For gpu only
+# Move to seperate file later
+cuml-cu12
