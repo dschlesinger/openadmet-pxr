@@ -10,13 +10,17 @@ import polars as pl
 from representations.chemeleon import ChemeleonFingerprint, FinetunedChemeleonFingerprint
 from representations.chemprop_rep import ChempropFingerprint
 from representations.fingerprints import MorganFingerprint
+from representations.mole import MolERepresentation
 from representations.rdkit_descriptors import RDKitDescriptors
+from representations.unimol import UniMolRepresentation
 
 _morgan = MorganFingerprint()
 _rdkit = RDKitDescriptors()
 _chemeleon = ChemeleonFingerprint()
 _chemprop = ChempropFingerprint()
 _finetuned_chemeleon = FinetunedChemeleonFingerprint()
+_unimol = UniMolRepresentation()
+_mole = MolERepresentation()
 
 
 def _morgan_features(df: pl.DataFrame) -> np.ndarray:
@@ -34,8 +38,17 @@ def _chemeleon_features(df: pl.DataFrame) -> np.ndarray:
 def _chemprop_features(df: pl.DataFrame) -> np.ndarray:
     return _chemprop.transform(df["SMILES"]).astype(np.float64)
 
+
 def _finetuned_chemeleon_features(df: pl.DataFrame) -> np.ndarray:
     return _finetuned_chemeleon.transform(df["SMILES"]).astype(np.float64)
+
+
+def _unimol_features(df: pl.DataFrame) -> np.ndarray:
+    return _unimol.transform(df["SMILES"]).astype(np.float64)
+
+
+def _mole_features(df: pl.DataFrame) -> np.ndarray:
+    return _mole.transform(df["SMILES"]).astype(np.float64)
 
 
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
@@ -44,6 +57,8 @@ INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     "chemeleon": _chemeleon_features,
     "chemprop_finetuned": _chemprop_features,
     "chemeleon_finetuned": _finetuned_chemeleon_features,
+    "unimol": _unimol_features,
+    "mole": _mole_features,
 }
 
 

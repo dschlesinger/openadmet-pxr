@@ -13,6 +13,7 @@ chemprop>=2.2.0
 pysr
 tabicl
 tabpfn
+unimol_tools
 
 # For gpu only
 # Move to seperate file later

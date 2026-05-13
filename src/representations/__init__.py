@@ -9,6 +9,8 @@ from representations.chemeleon import ChemeleonFingerprint, FinetunedChemeleonFi
 from representations.chemprop_rep import ChempropFingerprint
 from representations.fingerprints import MorganFingerprint
 from representations.rdkit_descriptors import RDKitDescriptors
+from representations.mole import MolERepresentation
+from representations.unimol import UniMolRepresentation
 
 REGISTRY: dict[str, type[Representation]] = {
     MorganFingerprint.name: MorganFingerprint,
@@ -16,6 +18,8 @@ REGISTRY: dict[str, type[Representation]] = {
     ChemeleonFingerprint.name: ChemeleonFingerprint,
     ChempropFingerprint.name: ChempropFingerprint,
     FinetunedChemeleonFingerprint.name: FinetunedChemeleonFingerprint,
+    UniMolRepresentation.name: UniMolRepresentation,
+    MolERepresentation.name: MolERepresentation,
 }
 
 __all__ = ["Representation", "REGISTRY"]
