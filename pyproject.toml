@@ -51,6 +51,7 @@ download-data = "data_tools.download:main"
 evaluate-models = "models.evaluate:main"
 generate-results = "models.predict:main"
 validate-results = "data_tools.validate_submission:main"
+score-table = "models.score_table:main"
 
 [project.urls]
 Documentation = "https://github.com/microsoft/python-package-template/tree/main#readme"
