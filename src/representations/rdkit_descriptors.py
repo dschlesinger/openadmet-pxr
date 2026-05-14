@@ -19,7 +19,7 @@ class RDKitDescriptors(Representation):
     Invalid SMILES produce an all-NaN row.
     """
 
-    name: ClassVar[str] = "rdkit_descriptors"
+    name: ClassVar[str] = "rdkit"
 
     @property
     def feature_names(self) -> list[str]:

@@ -17,7 +17,7 @@ class MorganFingerprint(Representation):
     Invalid SMILES produce an all-zero vector.
     """
 
-    name: ClassVar[str] = "morgan_fingerprint"
+    name: ClassVar[str] = "morgan"
 
     def __init__(self, radius: int = 2, n_bits: int = 2048) -> None:
         self.radius = radius

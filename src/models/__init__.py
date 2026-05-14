@@ -4,7 +4,7 @@ To add a new model: create a module in this directory, subclass PXRModel,
 set a unique `name` class variable, and add it here.
 """
 
-from models.base import PXRModel
+from models.base import PXRModel, PXRPreConfigModel
 from models.baseline import MeanBaseline, MedianBaseline
 from models.decision_tree import DecisionTree
 from models.knn import KNN
@@ -14,6 +14,7 @@ from models.symbolic_regression import SymbolicRegression
 from models.tabicl_model import TabICL
 from models.tabpfn_model import TabPFN
 from models.xgboost_model import XGBoost
+from models.one_each_dim import OneofEachDim
 
 REGISTRY: dict[str, type[PXRModel]] = {
     MeanBaseline.name: MeanBaseline,
@@ -26,6 +27,10 @@ REGISTRY: dict[str, type[PXRModel]] = {
     TabICL.name: TabICL,
     TabPFN.name: TabPFN,
     XGBoost.name: XGBoost,
+}
+
+PRECONFIG_REGISTRY: dict[str, type[PXRPreConfigModel]] = {
+    OneofEachDim.name: OneofEachDim,
 }
 
 __all__ = ["PXRModel", "REGISTRY"]

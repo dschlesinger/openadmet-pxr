@@ -1,7 +1,8 @@
 """Abstract base class for PXR challenge models."""
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import ClassVar, List
+from representations import Representation
 
 import numpy as np
 
@@ -18,3 +19,10 @@ class PXRModel(ABC):
     @abstractmethod
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return predictions for every row in X."""
+
+class PXRPreConfigModel(PXRModel):
+    """Class for models with preconfigured input, allows for more specific model pipelines
+
+    Does not dynamically take different reperesentions!
+    """
+    required_repersentations: ClassVar[List[str]] = []

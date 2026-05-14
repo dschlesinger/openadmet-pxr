@@ -52,13 +52,13 @@ def _mole_features(df: pl.DataFrame) -> np.ndarray:
 
 
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
-    "morgan": _morgan_features,
-    "rdkit": _rdkit_features,
-    "chemeleon": _chemeleon_features,
-    "chemprop_finetuned": _chemprop_features,
-    "chemeleon_finetuned": _finetuned_chemeleon_features,
-    "unimol": _unimol_features,
-    "mole": _mole_features,
+    _morgan.name: _morgan_features,
+    _rdkit.name: _rdkit_features,
+    _chemeleon.name: _chemeleon_features,
+    _chemprop.name: _chemprop_features,
+    _finetuned_chemeleon.name: _finetuned_chemeleon_features,
+    _unimol.name: _unimol_features,
+    _mole.name: _mole_features,
 }
 
 

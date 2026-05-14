@@ -8,9 +8,8 @@ import numpy as np
 import polars as pl
 
 from data_tools.inputs import INPUT_REGISTRY, featurize
-from models import REGISTRY, PXRModel
+from models import REGISTRY, PXRModel, PRECONFIG_REGISTRY, PXRPreConfigModel
 from models.utils import drop_nan_rows
-
 
 
 def _compute_metrics(actual: pl.Series, predicted: pl.Series) -> dict[str, float]:
@@ -48,6 +47,15 @@ def _resolve_models(names: list[str]) -> list[type[PXRModel]]:
         raise ValueError(f"Unknown models: {unknown}. Available: {list(REGISTRY.keys())}")
     return [REGISTRY[n] for n in names]
 
+def _resolve_preconfigs(names: list[str]) -> list[type[PXRPreConfigModel]]:
+    """Return preconfigured model classes for the given names, or all registered preconfigured models if names == ['all']."""
+    if names == ["all"]:
+        return list(PRECONFIG_REGISTRY.values())
+    unknown = [n for n in names if n not in PRECONFIG_REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown models: {unknown}. Available: {list(PRECONFIG_REGISTRY.keys())}")
+    return [PRECONFIG_REGISTRY[n] for n in names]
+
 
 def _resolve_inputs(names: list[str]) -> None:
     """Raise ValueError if any name is not in INPUT_REGISTRY."""
@@ -72,7 +80,8 @@ def main() -> None:
     parser.add_argument("--val-path", type=Path, default=Path("data/val_split.csv"), help="Path to validation CSV")
     parser.add_argument("--val-split", type=float, default=0.2, help="Fallback val fraction if --val-path not found")
     parser.add_argument("--seed", type=int, default=42, help="Fallback random seed if --val-path not found")
-    parser.add_argument("--models", nargs="+", default=["all"], help="Model names to evaluate, or omit for all")
+    parser.add_argument("--preconfigs", nargs="+", default=[], help="Names of preconfigured models, default is none")
+    parser.add_argument("--models", nargs="+", default=[], help="Model names to evaluate, or omit for all")
     parser.add_argument("--target", default="pEC50", help="Target column to predict")
     parser.add_argument(
         "--input",
@@ -88,9 +97,17 @@ def main() -> None:
         print(f"--val-split must be in (0, 1), got {args.val_split}", file=sys.stderr)
         sys.exit(1)
 
+    # If both models and preconfigs empty then assume all models and preconfigs
+    if not args.models and not args.preconfigs:
+        args.models = ["all"]
+        args.preconfigs = ["all"]
+
     try:
         model_classes = _resolve_models(args.models)
+        preconfig_classes = _resolve_preconfigs(args.preconfigs)
         _resolve_inputs(args.input)
+        for cls in preconfig_classes:
+            _resolve_inputs(cls.required_repersentations)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
@@ -101,12 +118,10 @@ def main() -> None:
     if args.target not in train_df.columns:
         print(f"Target '{args.target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
         sys.exit(1)
-    X_train, y_train = drop_nan_rows(featurize(train_df, args.input, cache_dir), train_df[args.target].to_numpy())
 
     if args.val_path.exists():
         val_df = pl.read_csv(args.val_path)
-        X_val, y_val = drop_nan_rows(featurize(val_df, args.input, cache_dir), val_df[args.target].to_numpy())
-        print(f"Using {args.val_path}: {len(y_val)} val / {len(y_train)} train molecules", file=sys.stderr)
+        print(f"Using {args.val_path}: {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
     else:
         print(
             f"WARNING: {args.val_path} not found — falling back to random split "
@@ -114,15 +129,24 @@ def main() -> None:
             file=sys.stderr,
         )
         rng = np.random.default_rng(args.seed)
-        idx = rng.permutation(len(X_train))
-        n_val = int(len(X_train) * args.val_split)
-        val_idx, train_idx = idx[:n_val], idx[n_val:]
-        X_train, y_train, X_val, y_val = X_train[train_idx], y_train[train_idx], X_train[val_idx], y_train[val_idx]
+        idx = rng.permutation(len(train_df))
+        n_val = int(len(train_df) * args.val_split)
+        val_df = train_df[idx[:n_val].tolist()]
+        train_df = train_df[idx[n_val:].tolist()]
 
-    results = [
-        (cls.name, _evaluate_model(cls(), X_train, y_train, X_val, y_val))
-        for cls in model_classes
-    ]
+    X_train, y_train = drop_nan_rows(featurize(train_df, args.input, cache_dir), train_df[args.target].to_numpy())
+    X_val, y_val = drop_nan_rows(featurize(val_df, args.input, cache_dir), val_df[args.target].to_numpy())
+
+    results = [(cls.name, _evaluate_model(cls(), X_train, y_train, X_val, y_val)) for cls in model_classes]
+
+    for cls in preconfig_classes:
+        X_train_pc, y_train_pc = drop_nan_rows(
+            featurize(train_df, cls.required_repersentations, cache_dir), train_df[args.target].to_numpy()
+        )
+        X_val_pc, y_val_pc = drop_nan_rows(
+            featurize(val_df, cls.required_repersentations, cache_dir), val_df[args.target].to_numpy()
+        )
+        results.append((cls.name, _evaluate_model(cls(), X_train_pc, y_train_pc, X_val_pc, y_val_pc)))
     reverse = args.sort_by == "R2"
     results.sort(key=lambda r: r[1][args.sort_by], reverse=reverse)
     _print_results(results)
