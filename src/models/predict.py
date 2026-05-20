@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 
+from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from models import REGISTRY, PRECONFIG_REGISTRY
 from models.utils import drop_nan_rows
@@ -21,6 +22,7 @@ def _generate(
     target: str,
     output_path: Path,
     cache_dir: Path,
+    filter_fn=None,
 ) -> pl.DataFrame:
     """Fit model on train data, predict on test data, write submission CSV."""
     if model_name not in REGISTRY:
@@ -34,6 +36,8 @@ def _generate(
         raise ValueError(f"Target '{target}' not found in train data. Columns: {list(train_df.columns)}")
 
     test_df = pl.read_csv(test_path)
+    if filter_fn is not None:
+        train_df = filter_fn(train_df, test_df)
 
     X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train")
 
@@ -66,6 +70,7 @@ def _generate_preconfig(
     target: str,
     output_path: Path,
     cache_dir: Path,
+    filter_fn=None,
 ) -> pl.DataFrame:
     """Fit a preconfigured model on train data, predict on test data, write submission CSV."""
     if model_name not in PRECONFIG_REGISTRY:
@@ -79,6 +84,8 @@ def _generate_preconfig(
         raise ValueError(f"Target '{target}' not found in train data. Columns: {list(train_df.columns)}")
 
     test_df = pl.read_csv(test_path)
+    if filter_fn is not None:
+        train_df = filter_fn(train_df, test_df)
 
     X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train")
 
@@ -169,21 +176,36 @@ def main() -> None:
     parser.add_argument("--target", default="pEC50", help="Target column in training data")
     parser.add_argument("--output", default=None, help="Output CSV path (default: results/<model>.csv)")
     parser.add_argument("--cache-dir", default="data/features", help="Directory for cached feature matrices")
+    parser.add_argument(
+        "--filter",
+        default=None,
+        choices=list(FILTER_REGISTRY.keys()),
+        help="Training data filter to apply before fitting. Available: " + str(list(FILTER_REGISTRY.keys())),
+    )
     args = parser.parse_args()
+
+    cache_dir = Path(args.cache_dir)
+    filter_fn = (lambda tr, te: apply_filter(tr, te, args.filter, cache_dir)) if args.filter else None
+
+    filter_tag = f"_{args.filter}" if args.filter else ""
 
     try:
         if args.preconfig is not None:
-            output = Path(args.output) if args.output else Path("results") / f"{args.preconfig}_submission.csv"
+            default_name = f"{args.preconfig}{filter_tag}_submission.csv"
+            output = Path(args.output) if args.output else Path("results") / default_name
             _generate_preconfig(
                 Path(args.train_path),
                 Path(args.test_path),
                 args.preconfig,
                 args.target,
                 output,
-                Path(args.cache_dir),
+                cache_dir,
+                filter_fn,
             )
         else:
-            output = Path(args.output) if args.output else Path("results") / f"{args.model}_submission.csv"
+            input_tag = "+".join(args.input)
+            default_name = f"{args.model}_{input_tag}{filter_tag}_submission.csv"
+            output = Path(args.output) if args.output else Path("results") / default_name
             _generate(
                 Path(args.train_path),
                 Path(args.test_path),
@@ -191,7 +213,8 @@ def main() -> None:
                 args.input,
                 args.target,
                 output,
-                Path(args.cache_dir),
+                cache_dir,
+                filter_fn,
             )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
