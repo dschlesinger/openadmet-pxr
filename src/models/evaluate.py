@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from models import REGISTRY, PXRModel, PRECONFIG_REGISTRY, PXRPreConfigModel
 from models.utils import drop_nan_rows
@@ -91,6 +92,13 @@ def main() -> None:
     )
     parser.add_argument("--cache-dir", default="data/features", help="Directory for cached feature matrices")
     parser.add_argument("--sort-by", default="MAE", choices=["MAE", "RMSE", "R2"], help="Metric to sort results by")
+    parser.add_argument(
+        "--filter",
+        default=None,
+        choices=list(FILTER_REGISTRY.keys()),
+        help="Training data filter to apply before fitting. Available: " + str(list(FILTER_REGISTRY.keys())),
+    )
+    parser.add_argument("--test-path", default="data/test.csv", help="Test CSV used when --filter is set")
     args = parser.parse_args()
 
     if not 0.0 < args.val_split < 1.0:
@@ -118,6 +126,10 @@ def main() -> None:
     if args.target not in train_df.columns:
         print(f"Target '{args.target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
         sys.exit(1)
+
+    if args.filter:
+        test_df = pl.read_csv(args.test_path)
+        train_df = apply_filter(train_df, test_df, args.filter, cache_dir)
 
     if args.val_path.exists():
         val_df = pl.read_csv(args.val_path)
@@ -149,4 +161,6 @@ def main() -> None:
         results.append((cls.name, _evaluate_model(cls(), X_train_pc, y_train_pc, X_val_pc, y_val_pc)))
     reverse = args.sort_by == "R2"
     results.sort(key=lambda r: r[1][args.sort_by], reverse=reverse)
+    filter_info = f"  filter={args.filter}" if args.filter else ""
+    print(f"input={' + '.join(args.input)}{filter_info}")
     _print_results(results)
