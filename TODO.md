@@ -4,7 +4,8 @@
 - [ ] Integrate Optuna for automated hyperparameter search across models
 
 ## Train/Test Split Strategies
-- [ ] Closest 30% to test set — use chemical similarity (Tanimoto/embedding distance) to carve out a training split that mirrors test distribution
+- [x] Closest 30% to test set — use chemical similarity (Tanimoto/embedding distance) to carve out a training split that mirrors test distribution. (Add filters)
+- [ ] Add psiformer as a filter
 - [ ] Finetune with test/train merge constraint — take pretrained repersentation model and finetune with the constaint that the training and test distribution should be similar
 
 ## Models
