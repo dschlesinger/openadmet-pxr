@@ -5,7 +5,6 @@
 
 ## Train/Test Split Strategies
 - [x] Closest 30% to test set — use chemical similarity (Tanimoto/embedding distance) to carve out a training split that mirrors test distribution. (Add filters)
-- [ ] Add psiformer as a filter
 - [ ] Finetune with test/train merge constraint — take pretrained repersentation model and finetune with the constaint that the training and test distribution should be similar
 
 ## Models
