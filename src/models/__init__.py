@@ -13,6 +13,7 @@ from models.mlp import MLP
 from models.symbolic_regression import SymbolicRegression
 from models.tabicl_model import TabICL
 from models.tabpfn_model import TabPFN
+from models.kan_model import KAN
 from models.xgboost_model import XGBoost
 from models.one_each_dim import OneofEachDim
 
@@ -26,6 +27,7 @@ REGISTRY: dict[str, type[PXRModel]] = {
     SymbolicRegression.name: SymbolicRegression,
     TabICL.name: TabICL,
     TabPFN.name: TabPFN,
+    KAN.name: KAN,
     XGBoost.name: XGBoost,
 }
 
