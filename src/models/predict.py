@@ -10,6 +10,7 @@ import polars as pl
 
 from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
+from data_tools.load import _assemble_pool
 from models import REGISTRY, PRECONFIG_REGISTRY
 from models.utils import drop_nan_rows
 
@@ -23,6 +24,7 @@ def _generate(
     output_path: Path,
     cache_dir: Path,
     filter_fn=None,
+    train_df: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Fit model on train data, predict on test data, write submission CSV."""
     if model_name not in REGISTRY:
@@ -31,7 +33,8 @@ def _generate(
     if unknown:
         raise ValueError(f"Unknown input(s): {unknown}. Available: {list(INPUT_REGISTRY.keys())}")
 
-    train_df = pl.read_csv(train_path)
+    if train_df is None:
+        train_df = pl.read_csv(train_path)
     if target not in train_df.columns:
         raise ValueError(f"Target '{target}' not found in train data. Columns: {list(train_df.columns)}")
 
@@ -71,6 +74,7 @@ def _generate_preconfig(
     output_path: Path,
     cache_dir: Path,
     filter_fn=None,
+    train_df: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
     """Fit a preconfigured model on train data, predict on test data, write submission CSV."""
     if model_name not in PRECONFIG_REGISTRY:
@@ -79,7 +83,8 @@ def _generate_preconfig(
     cls = PRECONFIG_REGISTRY[model_name]
     input_names = cls.required_repersentations
 
-    train_df = pl.read_csv(train_path)
+    if train_df is None:
+        train_df = pl.read_csv(train_path)
     if target not in train_df.columns:
         raise ValueError(f"Target '{target}' not found in train data. Columns: {list(train_df.columns)}")
 
@@ -182,10 +187,34 @@ def main() -> None:
         choices=list(FILTER_REGISTRY.keys()),
         help="Training data filter to apply before fitting. Available: " + str(list(FILTER_REGISTRY.keys())),
     )
+    parser.add_argument(
+        "--include-unblinded",
+        action="store_true",
+        help=(
+            "Add the 253 phase-1 unblinded test molecules to the training pool. "
+            "The submission CSV still contains all 513 test predictions. "
+            "Use load_test_holdout() for unbiased local evaluation on the remaining 260 molecules."
+        ),
+    )
     args = parser.parse_args()
 
     cache_dir = Path(args.cache_dir)
     filter_fn = (lambda tr, te: apply_filter(tr, te, args.filter, cache_dir)) if args.filter else None
+
+    train_override: pl.DataFrame | None = None
+    if args.include_unblinded:
+        train_override = _assemble_pool(include_unblinded=True, data_dir=Path(args.train_path).parent)
+        unblinded_smiles = set(
+            pl.read_csv(Path(args.train_path).parent / "test_unblinded.csv")["SMILES"].to_list()
+        )
+        test_smiles = set(pl.read_csv(args.test_path)["SMILES"].to_list())
+        n_contaminated = len(unblinded_smiles & test_smiles)
+        print(
+            f"--include-unblinded: training on {len(train_override)} molecules "
+            f"({n_contaminated} of {len(test_smiles)} test molecules were used in training — "
+            f"use load_test_holdout() for unbiased local evaluation)",
+            file=sys.stderr,
+        )
 
     filter_tag = f"_{args.filter}" if args.filter else ""
 
@@ -201,6 +230,7 @@ def main() -> None:
                 output,
                 cache_dir,
                 filter_fn,
+                train_df=train_override,
             )
         else:
             input_tag = "+".join(args.input)
@@ -215,6 +245,7 @@ def main() -> None:
                 output,
                 cache_dir,
                 filter_fn,
+                train_df=train_override,
             )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

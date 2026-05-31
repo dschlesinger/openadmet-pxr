@@ -9,10 +9,10 @@
 
 ## Models
 - [ ] Pretrained property prediction model (e.g. ChemBERTa, MolBERT, Uni-Mol fine-tune on PXR labels)
-- [ ] KANs (Kolmogorov-Arnold Networks) — drop-in replacement for MLP layers, bc why not
 
 ## Data
 - [ ] Find additional PXR datasets to augment training (ChEMBL, PubChem bioassay, literature)
 
 ## Structure-Based
 - [ ] Use PXR bound structure to inform prediction via Boltz2 (structure-conditioned scoring)
+- [ ] Use similarity to known binders in pdb

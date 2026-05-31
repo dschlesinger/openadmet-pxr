@@ -9,6 +9,7 @@ import polars as pl
 
 from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
+from data_tools.load import load_data
 from models import REGISTRY, PXRModel, PRECONFIG_REGISTRY, PXRPreConfigModel
 from models.utils import drop_nan_rows
 
@@ -99,6 +100,31 @@ def main() -> None:
         help="Training data filter to apply before fitting. Available: " + str(list(FILTER_REGISTRY.keys())),
     )
     parser.add_argument("--test-path", default="data/test.csv", help="Test CSV used when --filter is set")
+    parser.add_argument(
+        "--scaffold-split",
+        action="store_true",
+        help="Use scaffold-based train/val split (no scaffold leakage). Implies load_data().",
+    )
+    parser.add_argument(
+        "--include-unblinded",
+        action="store_true",
+        help="Add phase-1 unblinded test molecules to the training pool. Implies load_data().",
+    )
+    parser.add_argument(
+        "--include-counter-assay",
+        action="store_true",
+        help="Add pEC50_counter column from counter-assay data. Implies load_data().",
+    )
+    parser.add_argument(
+        "--include-single-conc",
+        action="store_true",
+        help="Add log2_fc_single column from single-concentration screen. Implies load_data().",
+    )
+    parser.add_argument(
+        "--unblinded-val",
+        action="store_true",
+        help="Use test_unblinded.csv as val (train=train.csv unchanged). Best proxy for prospective test distribution.",
+    )
     args = parser.parse_args()
 
     if not 0.0 < args.val_split < 1.0:
@@ -122,7 +148,17 @@ def main() -> None:
 
     cache_dir = Path(args.cache_dir)
 
-    train_df = pl.read_csv(args.train_path)
+    split_type = "scaffold" if args.scaffold_split else "unblinded"
+    train_df, val_df = load_data(
+        include_unblinded=args.include_unblinded,
+        include_counter_assay=args.include_counter_assay,
+        include_single_concentration=args.include_single_conc,
+        split_type=split_type,
+        val_fraction=args.val_split,
+        seed=args.seed,
+    )
+    print(f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
+
     if args.target not in train_df.columns:
         print(f"Target '{args.target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
         sys.exit(1)
@@ -130,21 +166,6 @@ def main() -> None:
     if args.filter:
         test_df = pl.read_csv(args.test_path)
         train_df = apply_filter(train_df, test_df, args.filter, cache_dir)
-
-    if args.val_path.exists():
-        val_df = pl.read_csv(args.val_path)
-        print(f"Using {args.val_path}: {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
-    else:
-        print(
-            f"WARNING: {args.val_path} not found — falling back to random split "
-            f"(val_split={args.val_split}, seed={args.seed}). Run download-data first.",
-            file=sys.stderr,
-        )
-        rng = np.random.default_rng(args.seed)
-        idx = rng.permutation(len(train_df))
-        n_val = int(len(train_df) * args.val_split)
-        val_df = train_df[idx[:n_val].tolist()]
-        train_df = train_df[idx[n_val:].tolist()]
 
     X_train, y_train = drop_nan_rows(featurize(train_df, args.input, cache_dir), train_df[args.target].to_numpy())
     X_val, y_val = drop_nan_rows(featurize(val_df, args.input, cache_dir), val_df[args.target].to_numpy())

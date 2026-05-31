@@ -5,9 +5,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import polars as pl
 
 from data_tools.inputs import INPUT_REGISTRY, featurize
+from data_tools.load import load_data
 from models import REGISTRY
 from models.utils import drop_nan_rows
 
@@ -27,38 +27,33 @@ def _compute_score(actual: np.ndarray, predicted: np.ndarray, metric: str) -> fl
 
 
 def _load_split(
-    train_path: Path,
-    val_path: Path,
     val_split: float,
     seed: int,
     target: str,
     input_names: list[str],
     cache_dir: Path,
+    scaffold_split: bool = False,
+    include_unblinded: bool = False,
+    include_counter_assay: bool = False,
+    include_single_conc: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    train_df = pl.read_csv(train_path)
+    split_type = "scaffold" if scaffold_split else "unblinded"
+    train_df, val_df = load_data(
+        include_unblinded=include_unblinded,
+        include_counter_assay=include_counter_assay,
+        include_single_concentration=include_single_conc,
+        split_type=split_type,
+        val_fraction=val_split,
+        seed=seed,
+    )
+    print(f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
+
     if target not in train_df.columns:
         print(f"Target '{target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
         sys.exit(1)
 
-    X_train_raw = featurize(train_df, input_names, cache_dir)
-    y_train_raw = train_df[target].to_numpy()
-    X_train, y_train = drop_nan_rows(X_train_raw, y_train_raw)
-
-    if val_path.exists():
-        val_df = pl.read_csv(val_path)
-        X_val_raw = featurize(val_df, input_names, cache_dir)
-        y_val_raw = val_df[target].to_numpy()
-        X_val, y_val = drop_nan_rows(X_val_raw, y_val_raw)
-        print(f"Using {val_path}: {len(y_val)} val / {len(y_train)} train molecules", file=sys.stderr)
-    else:
-        rng = np.random.default_rng(seed)
-        idx = rng.permutation(len(X_train))
-        n_val = int(len(X_train) * val_split)
-        val_idx, train_idx = idx[:n_val], idx[n_val:]
-        X_train, y_train, X_val, y_val = (
-            X_train[train_idx], y_train[train_idx],
-            X_train[val_idx], y_train[val_idx],
-        )
+    X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy())
+    X_val, y_val = drop_nan_rows(featurize(val_df, input_names, cache_dir), val_df[target].to_numpy())
     return X_train, y_train, X_val, y_val
 
 
@@ -85,9 +80,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate an input-by-model score table for the PXR challenge."
     )
-    parser.add_argument("--train-path", type=Path, default=Path("data/train_split.csv"))
-    parser.add_argument("--val-path", type=Path, default=Path("data/val_split.csv"))
-    parser.add_argument("--val-split", type=float, default=0.2)
+    parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--target", default="pEC50")
     parser.add_argument(
@@ -109,6 +102,11 @@ def main() -> None:
         help="Metric to display in the table (default: MAE)",
     )
     parser.add_argument("--cache-dir", type=Path, default=Path("data/features"))
+    parser.add_argument("--scaffold-split", action="store_true", help="Use scaffold-based train/val split via load_data()")
+    parser.add_argument("--include-unblinded", action="store_true", help="Add phase-1 unblinded molecules to training pool")
+    parser.add_argument("--include-counter-assay", action="store_true", help="Add pEC50_counter column from counter-assay data")
+    parser.add_argument("--include-single-conc", action="store_true", help="Add log2_fc_single column from single-concentration screen")
+    parser.add_argument("--unblinded-val", action="store_true", help="Use test_unblinded.csv as val (train=train.csv unchanged)")
     args = parser.parse_args()
 
     unknown_inputs = [n for n in args.inputs if n not in INPUT_REGISTRY]
@@ -126,8 +124,11 @@ def main() -> None:
     for inp in args.inputs:
         print(f"\n=== Input: {inp} ===", file=sys.stderr)
         X_train, y_train, X_val, y_val = _load_split(
-            args.train_path, args.val_path, args.val_split,
-            args.seed, args.target, [inp], args.cache_dir,
+            args.val_split, args.seed, args.target, [inp], args.cache_dir,
+            scaffold_split=args.scaffold_split,
+            include_unblinded=args.include_unblinded,
+            include_counter_assay=args.include_counter_assay,
+            include_single_conc=args.include_single_conc,
         )
         scores[inp] = {}
         for cls in model_classes:
