@@ -27,7 +27,7 @@ REGISTRY: dict[str, type[PXRModel]] = {
     SymbolicRegression.name: SymbolicRegression,
     TabICL.name: TabICL,
     TabPFN.name: TabPFN,
-    KAN.name: KAN,
+    # KAN.name: KAN,
     XGBoost.name: XGBoost,
 }
 
