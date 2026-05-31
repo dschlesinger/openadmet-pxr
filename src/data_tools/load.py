@@ -7,7 +7,9 @@ import polars as pl
 _DEFAULT_DATA_DIR = Path("data")
 _TRAIN_FILE = "train.csv"
 _TEST_FILE = "test.csv"
+_TEST_UNBLINDED_FILE = "test_unblinded.csv"
 _COUNTER_TRAIN_FILE = "counter_train.csv"
+_SINGLE_CONC_TRAIN_FILE = "single_concentration_train.csv"
 _TRAIN_SPLIT_FILE = "train_split.csv"
 _VAL_SPLIT_FILE = "val_split.csv"
 
@@ -18,12 +20,22 @@ def load_train(path: Path = _DEFAULT_DATA_DIR / _TRAIN_FILE) -> pl.DataFrame:
 
 
 def load_test(path: Path = _DEFAULT_DATA_DIR / _TEST_FILE) -> pl.DataFrame:
-    """Return the test split as a Polars DataFrame."""
+    """Return the blinded test split as a Polars DataFrame."""
+    return pl.read_csv(path)
+
+
+def load_test_unblinded(path: Path = _DEFAULT_DATA_DIR / _TEST_UNBLINDED_FILE) -> pl.DataFrame:
+    """Return the phase-1 unblinded test split (has pEC50 labels) as a Polars DataFrame."""
     return pl.read_csv(path)
 
 
 def load_counter_train(path: Path = _DEFAULT_DATA_DIR / _COUNTER_TRAIN_FILE) -> pl.DataFrame:
     """Return the counter-assay training split as a Polars DataFrame."""
+    return pl.read_csv(path)
+
+
+def load_single_concentration_train(path: Path = _DEFAULT_DATA_DIR / _SINGLE_CONC_TRAIN_FILE) -> pl.DataFrame:
+    """Return the single-concentration training split as a Polars DataFrame."""
     return pl.read_csv(path)
 
 

@@ -34,7 +34,7 @@ tox -e spark
 tox -e all
 
 # Data pipeline (run in order)
-download-data                         # fetch from HuggingFace, create train/val split
+download-data                         # fetch from HuggingFace (train, blinded test, unblinded test, counter-assay), create train/val split
 evaluate-models --models all          # eval on train_split/val_split, print RMSE/MAE/R2
 score-table                           # cross-tabulate every input × every model
 generate-results --model xgboost      # train on full train.csv, write results/<model>_submission.csv
@@ -73,7 +73,8 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 - **PreConfig model** (fixed representation): subclass `PXRPreConfigModel`, set `required_representations`, add to `PRECONFIG_REGISTRY`.
 
 **Data files** (not committed, created by `download-data`):
-- `data/train.csv`, `data/test.csv`, `data/counter_train.csv` — raw HuggingFace splits
+- `data/train.csv`, `data/test.csv`, `data/test_unblinded.csv`, `data/counter_train.csv`, `data/single_concentration_train.csv` — raw HuggingFace splits
+  - `test.csv` = blinded submission target (no labels); `test_unblinded.csv` = phase-1 labels released (use for evaluation)
 - `data/train_split.csv`, `data/val_split.csv` — canonical 90/10 split used by `evaluate-models`
 - `data/features/` — cached `.npy` feature arrays
 
