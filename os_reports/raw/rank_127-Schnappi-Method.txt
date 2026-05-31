@@ -1,0 +1,18 @@
+Data
+The submission was built on three subsets of the OpenADMET PXR Challenge dataset (huggingface.co/datasets/openadmet/pxr-challenge-train-test).
+single_concentration~21,000 rows, log2_fc_estimate
+train 4,139 rows, pEC50 from 8-point dose–response curves (PXR-expressing cells)
+test 513 rows—Prediction target
+
+Method
+A two-stage transfer-learning pipeline with ChemProp v2 (a directed message-passing neural network, D-MPNN, over molecular graphs):
+Stage 1 — Self-supervised-style pretraining on the 21k single-concentration data.
+The DMPNN backbone was trained to regress log2_fc_estimate from SMILES. This stage does not learn pEC50 values; its sole purpose is to expose the backbone to the PXR-relevant chemical space and learn a structure → activation-signal prior. The resulting checkpoint was saved as models/chemprop_pretrained_sc/model_0/best.pt.
+Stage 2 — Fine-tuning on the 4,139 dose–response pEC50 labels.
+The pretrained checkpoint was loaded and fine-tuned with the regression head pointing at pEC50.
+Inference. The 5-replicate ensemble was applied to the 513 blinded test SMILES, the per-molecule mean was taken as the final pEC50, and the output was written in the required submission format (Molecule Name, SMILES, pEC50).
+
+Acknowledgements
+OpenADMET Consortium — for organizing the PXR Challenge and releasing the train/test/counter/single-concentration/structure subsets
+ChemProp — for the open-source D-MPNN implementation (v2) used for both pretraining and fine-tuning.
+RDKit — for cheminformatics utilities and the physicochemical descriptors
