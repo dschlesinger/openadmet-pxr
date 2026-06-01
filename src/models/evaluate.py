@@ -66,6 +66,11 @@ def _resolve_inputs(names: list[str]) -> None:
         raise ValueError(f"Unknown input(s): {unknown}. Available: {list(INPUT_REGISTRY.keys())}")
 
 
+def _resolve_input(name: str) -> None:
+    """Raise ValueError if name is not in INPUT_REGISTRY."""
+    _resolve_inputs([name])
+
+
 def _print_results(results: list[tuple[str, dict[str, float]]]) -> None:
     """Print a formatted metrics table to stdout."""
     w = max(len(name) for name, _ in results)
@@ -78,10 +83,9 @@ def _print_results(results: list[tuple[str, dict[str, float]]]) -> None:
 def main() -> None:
     """Entry point for the evaluate-models CLI."""
     parser = argparse.ArgumentParser(description="Evaluate PXR models on a train/val split.")
-    parser.add_argument("--train-path", default="data/train_split.csv", help="Path to training CSV")
-    parser.add_argument("--val-path", type=Path, default=Path("data/val_split.csv"), help="Path to validation CSV")
-    parser.add_argument("--val-split", type=float, default=0.2, help="Fallback val fraction if --val-path not found")
-    parser.add_argument("--seed", type=int, default=42, help="Fallback random seed if --val-path not found")
+    parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory containing data CSVs")
+    parser.add_argument("--val-split", type=float, default=0.2, help="Val fraction for scaffold split")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for scaffold split")
     parser.add_argument("--preconfigs", nargs="+", default=[], help="Names of preconfigured models, default is none")
     parser.add_argument("--models", nargs="+", default=[], help="Model names to evaluate, or omit for all")
     parser.add_argument("--target", default="pEC50", help="Target column to predict")
@@ -120,14 +124,9 @@ def main() -> None:
         action="store_true",
         help="Add log2_fc_single column from single-concentration screen. Implies load_data().",
     )
-    parser.add_argument(
-        "--unblinded-val",
-        action="store_true",
-        help="Use test_unblinded.csv as val (train=train.csv unchanged). Best proxy for prospective test distribution.",
-    )
     args = parser.parse_args()
 
-    if not 0.0 < args.val_split < 1.0:
+    if args.scaffold_split and not 0.0 < args.val_split < 1.0:
         print(f"--val-split must be in (0, 1), got {args.val_split}", file=sys.stderr)
         sys.exit(1)
 
@@ -156,6 +155,7 @@ def main() -> None:
         split_type=split_type,
         val_fraction=args.val_split,
         seed=args.seed,
+        data_dir=args.data_dir,
     )
     print(f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
 

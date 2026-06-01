@@ -12,9 +12,6 @@ _TEST_FILE = "test.csv"
 _TEST_UNBLINDED_FILE = "test_unblinded.csv"
 _COUNTER_TRAIN_FILE = "counter_train.csv"
 _SINGLE_CONC_TRAIN_FILE = "single_concentration_train.csv"
-_TRAIN_SPLIT_FILE = "train_split.csv"
-_VAL_SPLIT_FILE = "val_split.csv"
-
 # test_unblinded.csv omits unit annotations in column names; map to train.csv naming
 _UNBLINDED_COL_MAP: dict[str, str] = {
     "Emax_estimate": "Emax_estimate (log2FC vs. baseline)",
@@ -54,16 +51,6 @@ def load_counter_train(path: Path = _DEFAULT_DATA_DIR / _COUNTER_TRAIN_FILE) -> 
 
 def load_single_concentration_train(path: Path = _DEFAULT_DATA_DIR / _SINGLE_CONC_TRAIN_FILE) -> pl.DataFrame:
     """Return the single-concentration training split as a Polars DataFrame."""
-    return pl.read_csv(path)
-
-
-def load_train_split(path: Path = _DEFAULT_DATA_DIR / _TRAIN_SPLIT_FILE) -> pl.DataFrame:
-    """Return the canonical training portion (from download-data) as a Polars DataFrame."""
-    return pl.read_csv(path)
-
-
-def load_val_split(path: Path = _DEFAULT_DATA_DIR / _VAL_SPLIT_FILE) -> pl.DataFrame:
-    """Return the canonical validation portion (from download-data) as a Polars DataFrame."""
     return pl.read_csv(path)
 
 

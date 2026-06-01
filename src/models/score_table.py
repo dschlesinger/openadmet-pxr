@@ -36,6 +36,7 @@ def _load_split(
     include_unblinded: bool = False,
     include_counter_assay: bool = False,
     include_single_conc: bool = False,
+    data_dir: Path = Path("data"),
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     split_type = "scaffold" if scaffold_split else "unblinded"
     train_df, val_df = load_data(
@@ -45,6 +46,7 @@ def _load_split(
         split_type=split_type,
         val_fraction=val_split,
         seed=seed,
+        data_dir=data_dir,
     )
     print(f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
 
@@ -106,7 +108,7 @@ def main() -> None:
     parser.add_argument("--include-unblinded", action="store_true", help="Add phase-1 unblinded molecules to training pool")
     parser.add_argument("--include-counter-assay", action="store_true", help="Add pEC50_counter column from counter-assay data")
     parser.add_argument("--include-single-conc", action="store_true", help="Add log2_fc_single column from single-concentration screen")
-    parser.add_argument("--unblinded-val", action="store_true", help="Use test_unblinded.csv as val (train=train.csv unchanged)")
+    parser.add_argument("--data-dir", type=Path, default=Path("data/"), help="Directory containing data CSVs")
     args = parser.parse_args()
 
     unknown_inputs = [n for n in args.inputs if n not in INPUT_REGISTRY]
@@ -129,6 +131,7 @@ def main() -> None:
             include_unblinded=args.include_unblinded,
             include_counter_assay=args.include_counter_assay,
             include_single_conc=args.include_single_conc,
+            data_dir=args.data_dir,
         )
         scores[inp] = {}
         for cls in model_classes:
