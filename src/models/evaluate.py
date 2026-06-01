@@ -107,7 +107,18 @@ def main() -> None:
     parser.add_argument(
         "--scaffold-split",
         action="store_true",
-        help="Use scaffold-based train/val split (no scaffold leakage). Implies load_data().",
+        help="Use scaffold-based train/val split (no scaffold leakage).",
+    )
+    parser.add_argument(
+        "--butina-split",
+        action="store_true",
+        help="Use Butina cluster split on Morgan fps (no similar molecules span both splits).",
+    )
+    parser.add_argument(
+        "--butina-cutoff",
+        type=float,
+        default=0.4,
+        help="Tanimoto distance cutoff for Butina clustering (default: 0.4).",
     )
     parser.add_argument(
         "--include-unblinded",
@@ -126,7 +137,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.scaffold_split and not 0.0 < args.val_split < 1.0:
+    if (args.scaffold_split or args.butina_split) and not 0.0 < args.val_split < 1.0:
         print(f"--val-split must be in (0, 1), got {args.val_split}", file=sys.stderr)
         sys.exit(1)
 
@@ -147,7 +158,12 @@ def main() -> None:
 
     cache_dir = Path(args.cache_dir)
 
-    split_type = "scaffold" if args.scaffold_split else "unblinded"
+    if args.scaffold_split:
+        split_type = "scaffold"
+    elif args.butina_split:
+        split_type = "butina"
+    else:
+        split_type = "unblinded"
     train_df, val_df = load_data(
         include_unblinded=args.include_unblinded,
         include_counter_assay=args.include_counter_assay,
@@ -155,6 +171,7 @@ def main() -> None:
         split_type=split_type,
         val_fraction=args.val_split,
         seed=args.seed,
+        butina_cutoff=args.butina_cutoff,
         data_dir=args.data_dir,
     )
     print(f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules", file=sys.stderr)
