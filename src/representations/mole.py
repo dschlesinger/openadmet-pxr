@@ -18,7 +18,7 @@ import polars as pl
 from representations.base import Representation
 
 _MOLE_DIR = Path(__file__).parents[2] / "third_party" / "mole"
-_MOLE_PYTHON = Path("/home/dsch/miniconda3/envs/moleß/bin/python")
+_MOLE_CONDA_ENV = "mole"
 _DEFAULT_REPRESENTATION = "gin_concat_R1000_E8000_lambda0.0001"
 _ZENODO_MODEL_URL = "https://zenodo.org/api/records/10803099/files/model.pth/content"
 
@@ -68,8 +68,8 @@ class MolERepresentation(Representation):
 
             result = subprocess.run(
                 [
-                    str(_MOLE_PYTHON),
-                    "gather_representation.py",
+                    "conda", "run", "-n", _MOLE_CONDA_ENV, "--no-capture-output",
+                    "python", "gather_representation.py",
                     "--smiles_filepath", str(input_csv),
                     "--smiles_colname", "smiles",
                     "--representation", self._representation,
