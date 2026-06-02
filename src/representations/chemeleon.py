@@ -67,6 +67,12 @@ def _find_best_checkpoint(ckpt_dir: Path) -> Path:
     return candidates[-1]
 
 
+def _find_fold_dirs(checkpoint_dir: Path) -> list[Path]:
+    """Return sorted fold subdirs (fold0/, fold1/, …) if present, else [checkpoint_dir]."""
+    fold_dirs = sorted(checkpoint_dir.glob("fold*/"), key=lambda p: p.name)
+    return fold_dirs if fold_dirs else [checkpoint_dir]
+
+
 def _load_finetuned_model(
     checkpoint_dir: Path, device: str | torch.device | None
 ) -> tuple[MPNN, featurizers.SimpleMoleculeMolGraphFeaturizer]:
@@ -78,11 +84,33 @@ def _load_finetuned_model(
     return model, featurizers.SimpleMoleculeMolGraphFeaturizer()
 
 
-class FinetunedChemeleonFingerprint(Representation):
-    """CheMeleon fingerprints from a locally finetuned Lightning checkpoint.
+def _fingerprint_one_model(
+    model: MPNN,
+    featurizer: featurizers.SimpleMoleculeMolGraphFeaturizer,
+    valid_smiles: list[str],
+    batch_size: int,
+    num_workers: int,
+    desc: str,
+) -> np.ndarray:
+    """Return (n_valid, embedding_dim) fingerprint array for one model."""
+    datapoints = [data.MoleculeDatapoint.from_smi(s) for s in valid_smiles]
+    dset = data.MoleculeDataset(datapoints, featurizer)
+    loader = data.build_dataloader(dset, batch_size=batch_size, num_workers=num_workers, shuffle=False, drop_last=False)
+    fps: list[np.ndarray] = []
+    with torch.no_grad():
+        for batch in tqdm(loader, desc=desc, unit="batch", leave=True):
+            bmg, *_ = batch
+            bmg.to(device=model.device)
+            fps.append(model.fingerprint(bmg).numpy(force=True))
+    return np.concatenate(fps, axis=0) if fps else np.empty((0,), dtype=np.float32)
 
-    Loads the full MPNN from a checkpoint saved by finetune_chemeleon.py and
-    extracts the message-passing fingerprint, identical interface to ChemeleonFingerprint.
+
+class FinetunedChemeleonFingerprint(Representation):
+    """CheMeleon fingerprints averaged across all folds trained by finetune_chemeleon.py.
+
+    Discovers fold subdirs (fold0/, fold1/, …) under checkpoint_dir automatically.
+    Falls back to loading directly from checkpoint_dir when no fold subdirs exist
+    (single-fold / legacy layout).
     """
 
     name: ClassVar[str] = "chemeleon_finetuned"
@@ -98,40 +126,38 @@ class FinetunedChemeleonFingerprint(Representation):
         self._device = device
         self._batch_size = batch_size
         self._num_workers = num_workers
-        self._model: MPNN | None = None
-        self._featurizer: featurizers.SimpleMoleculeMolGraphFeaturizer | None = None
+        self._models: list[tuple[MPNN, featurizers.SimpleMoleculeMolGraphFeaturizer]] | None = None
 
     def _ensure_loaded(self) -> None:
-        if self._model is None:
-            self._model, self._featurizer = _load_finetuned_model(self._checkpoint_dir, self._device)
+        if self._models is None:
+            fold_dirs = _find_fold_dirs(self._checkpoint_dir)
+            print(f"Loading {len(fold_dirs)} finetuned CheMeleon checkpoint(s) from {self._checkpoint_dir}")
+            self._models = [_load_finetuned_model(d, self._device) for d in fold_dirs]
 
     def transform(self, smiles: pl.Series) -> np.ndarray:
-        """Return a (n_molecules, embedding_dim) float32 array of finetuned CheMeleon fingerprints."""
+        """Return a (n_molecules, embedding_dim) float32 array averaged across all folds."""
         self._ensure_loaded()
-        assert self._model is not None and self._featurizer is not None
+        assert self._models is not None
 
         smiles_list = smiles.to_list()
         valid_idx = [i for i, s in enumerate(smiles_list) if MolFromSmiles(s) is not None]
         valid_smiles = [smiles_list[i] for i in valid_idx]
 
-        datapoints = [data.MoleculeDatapoint.from_smi(s) for s in valid_smiles]
-        dset = data.MoleculeDataset(datapoints, self._featurizer)
-        loader = data.build_dataloader(dset, batch_size=self._batch_size, num_workers=self._num_workers, shuffle=False, drop_last=False)
-
-        fps: list[np.ndarray] = []
-        with torch.no_grad():
-            for batch in tqdm(loader, desc="Finetuned CheMeleon fingerprints", unit="batch", leave=True):
-                bmg, *_ = batch
-                bmg.to(device=self._model.device)
-                fps.append(self._model.fingerprint(bmg).numpy(force=True))
-
-        if not fps:
-            dummy = self._model.fingerprint(
-                BatchMolGraph([self._featurizer(MolFromSmiles("C"))]).to(device=self._model.device)
+        if not valid_smiles:
+            model, featurizer = self._models[0]
+            dummy = model.fingerprint(
+                BatchMolGraph([featurizer(MolFromSmiles("C"))]).to(device=model.device)
             )
             return np.full((len(smiles_list), dummy.shape[1]), np.nan, dtype=np.float32)
 
-        valid_fps = np.concatenate(fps, axis=0)
+        fold_fps: list[np.ndarray] = []
+        for fold_idx, (model, featurizer) in enumerate(self._models):
+            desc = f"CheMeleon finetuned fold {fold_idx}/{len(self._models)}"
+            fps = _fingerprint_one_model(model, featurizer, valid_smiles, self._batch_size, self._num_workers, desc)
+            fold_fps.append(fps)
+
+        # Average fingerprints across folds then write back to output array
+        valid_fps = np.mean(fold_fps, axis=0).astype(np.float32)
         out = np.full((len(smiles_list), valid_fps.shape[1]), np.nan, dtype=np.float32)
         for result_i, orig_i in enumerate(valid_idx):
             out[orig_i] = valid_fps[result_i]

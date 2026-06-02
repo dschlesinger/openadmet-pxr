@@ -85,11 +85,13 @@ def _butina_split(
     """Split df by Butina/Taylor clustering on Morgan fps; no similar molecules span both splits."""
     try:
         from rdkit import DataStructs  # type: ignore[import]
-        from rdkit.Chem import AllChem, MolFromSmiles  # type: ignore[import]
+        from rdkit.Chem import MolFromSmiles  # type: ignore[import]
+        from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator  # type: ignore[import]
         from rdkit.ML.Cluster import Butina  # type: ignore[import]
     except ImportError as exc:
         raise ImportError("rdkit is required for Butina splitting") from exc
 
+    morgan_gen = GetMorganGenerator(radius=2, fpSize=2048)
     smiles = df["SMILES"].to_list()
     fps = []
     invalid: list[int] = []
@@ -99,7 +101,7 @@ def _butina_split(
             invalid.append(idx)
             fps.append(None)
         else:
-            fps.append(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048))
+            fps.append(morgan_gen.GetFingerprint(mol))
 
     valid_fps = [fp for fp in fps if fp is not None]
     valid_indices = [i for i, fp in enumerate(fps) if fp is not None]
