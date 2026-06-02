@@ -31,6 +31,21 @@ def small_df() -> pl.DataFrame:
 
 
 @pytest.fixture()
+def data_dir(tmp_path: object, small_df: pl.DataFrame) -> object:
+    """Write train.csv and test_unblinded.csv so tests can use the default unblinded split."""
+    smiles = small_df["SMILES"].to_list()
+    train_path = tmp_path / "train.csv"  # type: ignore[operator]
+    unblinded_path = tmp_path / "test_unblinded.csv"  # type: ignore[operator]
+    pl.DataFrame({"SMILES": smiles[:7], "pEC50": [float(i) for i in range(7)]}).write_csv(train_path)
+    pl.DataFrame({
+        "SMILES": smiles[7:],
+        "pEC50": [float(i) for i in range(3)],
+        "OCNT Batch": [f"OCNT-{i:04d}-01" for i in range(3)],
+    }).write_csv(unblinded_path)
+    return tmp_path
+
+
+@pytest.fixture()
 def small_xy() -> tuple[np.ndarray, np.ndarray]:
     X = np.zeros((10, 4), dtype=np.float64)
     y = np.arange(10, dtype=np.float64)
@@ -157,12 +172,10 @@ def test_print_results(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_all_models(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, capsys: pytest.CaptureFixture[str], small_df: pl.DataFrame
+    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
     monkeypatch.setattr(
-        sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--cache-dir", str(tmp_path / "cache")]
+        sys, "argv", ["evaluate-models", "--data-dir", str(data_dir), "--cache-dir", str(data_dir) + "/cache", "--models", "mean_baseline", "median_baseline"]
     )
     main()
     out = capsys.readouterr().out
@@ -171,14 +184,12 @@ def test_main_all_models(
 
 
 def test_main_specific_model(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, capsys: pytest.CaptureFixture[str], small_df: pl.DataFrame
+    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate-models", "--train-path", str(csv_path), "--models", "mean_baseline", "--cache-dir", str(tmp_path / "cache")],
+        ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--cache-dir", str(data_dir) + "/cache"],
     )
     main()
     out = capsys.readouterr().out
@@ -186,50 +197,42 @@ def test_main_specific_model(
 
 
 def test_main_custom_input(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, capsys: pytest.CaptureFixture[str], small_df: pl.DataFrame
+    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate-models", "--train-path", str(csv_path), "--input", "rdkit+morgan", "--cache-dir", str(tmp_path / "cache")],
+        ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--input", "rdkit", "morgan", "--cache-dir", str(data_dir) + "/cache"],
     )
     main()
     assert "mean_baseline" in capsys.readouterr().out
 
 
-def test_main_bad_val_split(monkeypatch: pytest.MonkeyPatch, tmp_path: object, small_df: pl.DataFrame) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--val-split", "0.0"])
+def test_main_bad_val_split(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--scaffold-split", "--data-dir", str(tmp_path), "--val-split", "0.0"])
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
 
 
-def test_main_unknown_model(monkeypatch: pytest.MonkeyPatch, tmp_path: object, small_df: pl.DataFrame) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--models", "no_such_model"])
+def test_main_unknown_model(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--data-dir", str(tmp_path), "--models", "no_such_model"])
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
 
 
-def test_main_unknown_input(monkeypatch: pytest.MonkeyPatch, tmp_path: object, small_df: pl.DataFrame) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--input", "no_such_input"])
+def test_main_unknown_input(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--data-dir", str(tmp_path), "--input", "no_such_input"])
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
 
 
-def test_main_missing_target(monkeypatch: pytest.MonkeyPatch, tmp_path: object, small_df: pl.DataFrame) -> None:
-    csv_path = tmp_path / "train.csv"  # type: ignore[operator]
-    small_df.write_csv(csv_path)
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--train-path", str(csv_path), "--target", "no_column"])
+def test_main_missing_target(
+    monkeypatch: pytest.MonkeyPatch, data_dir: object,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--target", "no_column"])
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
@@ -255,7 +258,7 @@ def test_generate_writes_csv(tmp_path: object, predict_dfs: tuple[object, object
     from pathlib import Path
 
     cache = tmp_path / "cache"  # type: ignore[operator]
-    result = _generate(Path(str(train_path)), Path(str(test_path)), "mean_baseline", "morgan", "pEC50", Path(str(out)), Path(str(cache)))
+    result = _generate(Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["morgan"], "pEC50", Path(str(out)), Path(str(cache)))
     assert out.exists()  # type: ignore[union-attr]
     assert "Molecule Name" in result.columns
     assert "SMILES" in result.columns
@@ -269,7 +272,7 @@ def test_generate_unknown_model(tmp_path: object, predict_dfs: tuple[object, obj
 
     with pytest.raises(ValueError, match="Unknown model"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "no_such_model", "morgan", "pEC50",
+            Path(str(train_path)), Path(str(test_path)), "no_such_model", ["morgan"], "pEC50",
             Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
         )
 
@@ -280,7 +283,7 @@ def test_generate_unknown_input(tmp_path: object, predict_dfs: tuple[object, obj
 
     with pytest.raises(ValueError, match="Unknown input"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "mean_baseline", "no_input", "pEC50",
+            Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["no_input"], "pEC50",
             Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
         )
 
@@ -291,7 +294,7 @@ def test_generate_missing_target(tmp_path: object, predict_dfs: tuple[object, ob
 
     with pytest.raises(ValueError, match="Target"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "mean_baseline", "morgan", "no_col",
+            Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["morgan"], "no_col",
             Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
         )
 

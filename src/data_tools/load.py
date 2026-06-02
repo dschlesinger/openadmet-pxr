@@ -12,9 +12,6 @@ _TEST_FILE = "test.csv"
 _TEST_UNBLINDED_FILE = "test_unblinded.csv"
 _COUNTER_TRAIN_FILE = "counter_train.csv"
 _SINGLE_CONC_TRAIN_FILE = "single_concentration_train.csv"
-_TRAIN_SPLIT_FILE = "train_split.csv"
-_VAL_SPLIT_FILE = "val_split.csv"
-
 # test_unblinded.csv omits unit annotations in column names; map to train.csv naming
 _UNBLINDED_COL_MAP: dict[str, str] = {
     "Emax_estimate": "Emax_estimate (log2FC vs. baseline)",
@@ -57,16 +54,6 @@ def load_single_concentration_train(path: Path = _DEFAULT_DATA_DIR / _SINGLE_CON
     return pl.read_csv(path)
 
 
-def load_train_split(path: Path = _DEFAULT_DATA_DIR / _TRAIN_SPLIT_FILE) -> pl.DataFrame:
-    """Return the canonical training portion (from download-data) as a Polars DataFrame."""
-    return pl.read_csv(path)
-
-
-def load_val_split(path: Path = _DEFAULT_DATA_DIR / _VAL_SPLIT_FILE) -> pl.DataFrame:
-    """Return the canonical validation portion (from download-data) as a Polars DataFrame."""
-    return pl.read_csv(path)
-
-
 def load_splits(
     train_path: Path = _DEFAULT_DATA_DIR / _TRAIN_FILE,
     test_path: Path = _DEFAULT_DATA_DIR / _TEST_FILE,
@@ -87,6 +74,60 @@ def load_test_holdout(
     test = load_test(test_path)
     unblinded_smiles = set(load_test_unblinded(unblinded_path)["SMILES"].to_list())
     return test.filter(~pl.col("SMILES").is_in(unblinded_smiles))
+
+
+def _butina_split(
+    df: pl.DataFrame,
+    val_fraction: float,
+    seed: int,
+    cutoff: float = 0.4,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Split df by Butina/Taylor clustering on Morgan fps; no similar molecules span both splits."""
+    try:
+        from rdkit import DataStructs  # type: ignore[import]
+        from rdkit.Chem import MolFromSmiles  # type: ignore[import]
+        from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator  # type: ignore[import]
+        from rdkit.ML.Cluster import Butina  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError("rdkit is required for Butina splitting") from exc
+
+    morgan_gen = GetMorganGenerator(radius=2, fpSize=2048)
+    smiles = df["SMILES"].to_list()
+    fps = []
+    invalid: list[int] = []
+    for idx, smi in enumerate(smiles):
+        mol = MolFromSmiles(smi)
+        if mol is None:
+            invalid.append(idx)
+            fps.append(None)
+        else:
+            fps.append(morgan_gen.GetFingerprint(mol))
+
+    valid_fps = [fp for fp in fps if fp is not None]
+    valid_indices = [i for i, fp in enumerate(fps) if fp is not None]
+
+    dists: list[float] = []
+    for i in range(1, len(valid_fps)):
+        sims = DataStructs.BulkTanimotoSimilarity(valid_fps[i], valid_fps[:i])
+        dists.extend(1.0 - s for s in sims)
+
+    raw_clusters = Butina.ClusterData(dists, len(valid_fps), cutoff, isDistData=True)
+    # Map back to original DataFrame indices
+    clusters: list[list[int]] = [[valid_indices[j] for j in cluster] for cluster in raw_clusters]
+
+    sorted_clusters = sorted(clusters, key=len, reverse=True)
+    random.Random(seed).shuffle(sorted_clusters)
+
+    n_total = len(df)
+    val_indices: list[int] = []
+    train_indices: list[int] = invalid[:]  # invalid SMILES always go to train
+    for cluster in sorted_clusters:
+        if n_total == 0 or len(val_indices) / n_total < val_fraction:
+            val_indices.extend(cluster)
+        else:
+            train_indices.extend(cluster)
+
+    return df[train_indices], df[val_indices]
 
 
 def _scaffold_split(
@@ -205,19 +246,19 @@ def load_data(  # pylint: disable=too-many-arguments
     include_unblinded: bool = False,
     include_counter_assay: bool = False,
     include_single_concentration: bool = False,
-    split_type: Literal["random", "scaffold", "unblinded"] = "unblinded",
+    split_type: Literal["random", "scaffold", "butina", "unblinded"] = "unblinded",
     val_fraction: float = 0.1,
     seed: int = 42,
+    butina_cutoff: float = 0.4,
     data_dir: Path = Path("data"),
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Assemble training pool and return (train_df, val_df).
 
     split_type options:
-      'scaffold'  — Bemis-Murcko scaffold split; no scaffold leakage (default)
+      'unblinded' — train=train.csv, val=test_unblinded.csv; best proxy for prospective test distribution
+      'scaffold'  — Bemis-Murcko scaffold split; no scaffold leakage
+      'butina'    — Butina/Taylor cluster split on Morgan fps; no similar molecules span both splits
       'random'    — seeded random split
-      'unblinded' — train=train.csv, val=test_unblinded.csv (253 phase-1 labeled molecules);
-                    best proxy for the prospective test distribution. include_unblinded is
-                    ignored in this mode.
     """
     if split_type == "unblinded":
         base_schema = load_train(data_dir / _TRAIN_FILE)
@@ -239,6 +280,9 @@ def load_data(  # pylint: disable=too-many-arguments
 
     if split_type == "scaffold":
         return _scaffold_split(base, val_fraction, seed)
+
+    if split_type == "butina":
+        return _butina_split(base, val_fraction, seed, butina_cutoff)
 
     shuffled = base.sample(fraction=1.0, shuffle=True, seed=seed)
     n_val = int(len(shuffled) * val_fraction)
