@@ -25,6 +25,7 @@ Overfitting notes:
 """
 
 import argparse
+import random
 import sys
 from pathlib import Path
 
@@ -41,7 +42,8 @@ def _randomize_smiles(smiles: str, seed: int) -> str:
     mol = MolFromSmiles(smiles)
     if mol is None:
         return smiles
-    return MolToSmiles(mol, doRandom=True, randomSeed=seed % (2**31))
+    random.seed(seed % (2**31))
+    return MolToSmiles(mol, doRandom=True)
 
 
 def _predict_with_augmentation(
@@ -85,7 +87,7 @@ def main() -> None:
     parser.add_argument("--checkpoints", type=Path, default=Path("checkpoints/unimol"))
     # Training
     parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
     parser.add_argument("--kfold", type=int, default=5, help="UniMol internal scaffold kfold")
     parser.add_argument("--early-stopping", type=int, default=10, help="Early stopping patience")

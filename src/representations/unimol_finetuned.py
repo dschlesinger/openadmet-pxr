@@ -8,6 +8,7 @@ Requires: pip install unimol_tools
 Run scripts/finetune_unimol.py first to produce checkpoints.
 """
 
+import shutil
 from pathlib import Path
 from typing import ClassVar
 
@@ -45,6 +46,7 @@ class FinetunedUniMolRepresentation(Representation):
         if self._models is not None:
             return
         from unimol_tools import UniMolRepr  # type: ignore[import]
+        from unimol_tools.weights.weighthub import get_weight_dir  # type: ignore[import]
 
         ckpt_files = sorted(self._checkpoint_dir.glob("model_*.pth"))
         if not ckpt_files:
@@ -53,15 +55,31 @@ class FinetunedUniMolRepresentation(Representation):
                 "Run scripts/finetune_unimol.py first."
             )
 
+        # UniMolModel expects dict.txt alongside each .pth — copy from weights dir if absent
+        dict_dst = self._checkpoint_dir / "dict.txt"
+        if not dict_dst.exists():
+            dict_src = Path(get_weight_dir()) / "mol.dict.txt"
+            if dict_src.exists():
+                shutil.copy(dict_src, dict_dst)
+
+        import torch
+
         self._models = []
         for ckpt in ckpt_files:
+            # UniMolRepr hardcodes output_dim=1; construct with base weights then
+            # overwrite encoder weights from the finetuned checkpoint (strict=False
+            # silently skips the head size mismatch — head is unused during get_repr)
             model = UniMolRepr(
                 data_type="molecule",
                 batch_size=self._batch_size,
                 remove_hs=self._remove_hs,
                 use_cuda=self._use_gpu,
-                pretrained_model_path=str(ckpt),
             )
+            state = torch.load(str(ckpt), map_location=str(model.device), weights_only=True)
+            inner = state.get("model_state_dict", state)
+            current = model.model.state_dict()
+            compatible = {k: v for k, v in inner.items() if k in current and v.shape == current[k].shape}
+            model.model.load_state_dict(compatible, strict=False)
             self._models.append(model)
         print(f"Loaded {len(self._models)} UniMol checkpoint(s) from {self._checkpoint_dir}")
 
