@@ -1,3 +1,3 @@
 [submodule "third_party/mole"]
 	path = third_party/mole
-	url = https://github.com/rolayoalarcon/MolE.git
+	url = https://github.com/dschlesinger/MolE.git
