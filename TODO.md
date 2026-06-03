@@ -16,6 +16,9 @@
 - [ ] Multitask training: pEC50 + counter-assay + single-conc + FXR heads — largest single ablation-documented lift (+0.070 RAE per discoverybytes)
 - [ ] PMI shape descriptors (19 RDKit conformer-derived features) as `x_d` — captures 3D shape orthogonal to 2D topology
 
+## Delta / Pairwise Models
+- [ ] Pairwise Chemprop delta model — train D-MPNN on all pairwise Δ pEC50 (input: two SMILES; target: pEC50_i − pEC50_j), oversample activity cliff pairs (Tanimoto ≥ 0.7, |Δ pEC50| ≥ 1.0) 3×, anchor test predictions to 10 nearest training neighbors via the learned delta; ldbc1999 (rank 65) — works only when training coverage is dense (90.8% of test compounds had no neighbor within Tanimoto ≥ 0.7, yielding Spearman = −0.071)
+
 ## Ensemble / Stacking
 - [ ] Ridge or ElasticNetCV meta-learner on OOF predictions — replace simple average in `OneofEachDim`; fit stacker on out-of-fold preds only
 - [ ] NNLS stacking for large candidate pools — non-negative weights, automatically zeros out redundant models
