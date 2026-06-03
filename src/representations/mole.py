@@ -1,7 +1,7 @@
 """MolE (Recursion) graph-transformer molecular representations.
 
 Calls third_party/mole/gather_representation.py via subprocess in the
-moleß conda environment. SMILES are written to a temp CSV; embeddings are
+mole conda environment. SMILES are written to a temp CSV; embeddings are
 read back from the output TSV.
 """
 
@@ -23,6 +23,16 @@ _DEFAULT_REPRESENTATION = "gin_concat_R1000_E8000_lambda0.0001"
 _ZENODO_MODEL_URL = "https://zenodo.org/api/records/10803099/files/model.pth/content"
 
 
+def _find_conda_env_python(env_name: str) -> str:
+    """Return the Python executable path for a conda env, bypassing conda run."""
+    home = Path.home()
+    for base in ["miniconda3", "anaconda3", "miniforge3", "mambaforge"]:
+        candidate = home / base / "envs" / env_name / "bin" / "python"
+        if candidate.exists():
+            return str(candidate)
+    raise RuntimeError(f"Cannot find Python executable for conda env '{env_name}'")
+
+
 def _ensure_weights(representation: str) -> None:
     model_pth = _MOLE_DIR / "ckpt" / representation / "checkpoints" / "model.pth"
     if model_pth.exists():
@@ -42,9 +52,11 @@ class MolERepresentation(Representation):
         self,
         representation: str = _DEFAULT_REPRESENTATION,
         accelerator: str = "cuda:0",
+        batch_size: int = 256,
     ) -> None:
         self._representation = representation
         self._accelerator = accelerator
+        self._batch_size = batch_size
 
     def transform(self, smiles: pl.Series) -> np.ndarray:
         """Return a (n_molecules, embedding_dim) float32 array of MolE embeddings."""
@@ -66,16 +78,19 @@ class MolERepresentation(Representation):
 
             pd.DataFrame({"smiles": valid_smiles}).to_csv(input_csv, index=False)
 
+            python = _find_conda_env_python(_MOLE_CONDA_ENV)
+            cmd = [
+                python, "gather_representation.py",
+                "--smiles_filepath", str(input_csv),
+                "--smiles_colname", "smiles",
+                "--representation", self._representation,
+                "--gpu", self._accelerator,
+                "--output_filepath", str(output_tsv),
+                "--batch_size", str(self._batch_size),
+            ]
+
             result = subprocess.run(
-                [
-                    "conda", "run", "-n", _MOLE_CONDA_ENV, "--no-capture-output",
-                    "python", "gather_representation.py",
-                    "--smiles_filepath", str(input_csv),
-                    "--smiles_colname", "smiles",
-                    "--representation", self._representation,
-                    "--gpu", self._accelerator,
-                    "--output_filepath", str(output_tsv),
-                ],
+                cmd,
                 cwd=str(_MOLE_DIR),
                 capture_output=True,
                 text=True,
@@ -83,7 +98,7 @@ class MolERepresentation(Representation):
 
             if result.returncode != 0:
                 raise RuntimeError(
-                    f"MolE subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+                    f"MolE subprocess failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}\n{' '.join(cmd)}"
                 )
 
             emb_df = pd.read_csv(output_tsv, sep="\t", index_col=0)
