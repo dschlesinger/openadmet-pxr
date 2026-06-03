@@ -30,8 +30,8 @@
 - [ ] PXR co-crystal ligand Tanimoto similarity — 5 ECFP4 features (max, mean, std, top2, top3) vs. 56 PDB co-crystal ligands
 - [ ] Cofolding structural features from dargason's dataset — mean/max ipTM, pTM, pLDDT, contact geometry at 3.5/4.5/5.0 Å per ligand across Chai-1/OpenFold3/Boltz2
 - [ ] UniMol randomized SMILES augmentation at inference — average predictions over 10 SMILES orderings per compound
-- [ ] jazzy QM interaction descriptors — hydrogen bond donor/acceptor atom-pair energies from `jazzy` library; used by auP7s (rank 27)
-- [ ] xTB quantum descriptors — semiempirical GFN2-xTB atomic charges, chemical hardness, dipole, HOMO/LUMO gap; used by auP7s (rank 27)
+- [x] jazzy QM interaction descriptors — hydrogen bond donor/acceptor atom-pair energies from `jazzy` library; used by auP7s (rank 27)
+- [x] xTB quantum descriptors — semiempirical GFN2-xTB atomic charges, chemical hardness, dipole, HOMO/LUMO gap; used by auP7s (rank 27)
 
 ## Auxiliary Data
 - [ ] ChEMBL nuclear receptor data (PXR, FXR, LXRa, LXRb EC50) as Chemprop multitask pretraining head
