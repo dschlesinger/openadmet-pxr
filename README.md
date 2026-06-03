@@ -11,9 +11,14 @@ git clone --recurse-submodules <repo>
 pip install -e .
 ```
 
-GPU acceleration (optional): uncomment `cuml-cu12` in `requirements.txt` before installing.
+GPU acceleration (optional): install `cuml-cu13` and `cupy-cuda13x` (CUDA 13), then ensure `libcudart.so.13` is on `LD_LIBRARY_PATH` (usually at `.venv/lib/python3.12/site-packages/nvidia/cu13/lib/`).
 
-MolE representation: requires a separate `mole` conda environment and the `third_party/mole` submodule (see [Representations](#representations)).
+**MolE representation**: requires a separate `mole` conda environment and the `third_party/mole` submodule (see [Representations](#representations)).
+
+**xTB representation**: requires a separate `xtb` conda environment — `xtb-python` is not on PyPI:
+```bash
+conda env create -f third_party/xtb/environment.yml
+```
 
 ## Pipeline
 
@@ -134,6 +139,8 @@ Pass `--input <name> [name ...]` to `evaluate-models`, `generate-results`, and `
 | `chemprop_finetuned` | chemprop MPNN trained on PXR data; run `scripts/train_chemprop.py` first |
 | `unimol` | UniMol 3D CLS-token embeddings, 512-dim; ~500 MB weights auto-downloaded to `~/.unimol/` on first use |
 | `mole` | MolE graph-transformer embeddings; requires a separate `mole` conda env and `third_party/mole` submodule |
+| `jazzy` | Jazzy solvation and hydrogen-bonding descriptors (hydration free energy, donor/acceptor counts, etc.) |
+| `xtb` | 12 GFN2-xTB quantum chemistry features: HOMO/LUMO energies, gap, dipole, partial charge statistics; requires the `xtb` conda env (`third_party/xtb/environment.yml`) |
 
 To add a new representation: subclass `Representation` in `src/representations/`, instantiate it and add a featurize function to `INPUT_REGISTRY` in `src/data_tools/inputs.py`.
 
@@ -177,6 +184,7 @@ scripts/
   train_chemprop.py
   eda_*.py
 third_party/mole/     # git submodule: MolE graph-transformer
+third_party/xtb/      # git submodule: GFN2-xTB descriptor computation script + conda env
 checkpoints/          # fine-tuned weights (chemeleon/, chemprop/)
 data/                 # created by download-data (gitignored)
 results/              # submission CSVs and prediction distribution PNGs

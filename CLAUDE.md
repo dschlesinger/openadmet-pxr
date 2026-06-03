@@ -8,6 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install with dev dependencies
 pip install -e ".[test]"
 
+# xTB — requires a separate conda environment (xtb-python is not on PyPI)
+conda env create -f third_party/xtb/environment.yml
+
 # Format
 black src/ tests/
 
@@ -63,7 +66,9 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 
 - `src/representations/` — molecular featurizers
   - `base.py` — `Representation` (ABC): must set `name` and implement `transform(smiles: pl.Series) -> np.ndarray`
-  - Concrete implementations: `fingerprints.py` (Morgan), `rdkit_descriptors.py`, `chemeleon.py`, `chemprop_rep.py`, `unimol.py`, `mole.py`
+  - Concrete implementations: `fingerprints.py` (Morgan), `rdkit_descriptors.py`, `chemeleon.py`, `chemprop_rep.py`, `unimol.py`, `mole.py`, `jazzy_descriptors.py`, `xtb_descriptors.py`
+  - `jazzy_descriptors.py` — Jazzy solvation/H-bonding descriptors; requires `jazzy` (in `requirements.txt`)
+  - `xtb_descriptors.py` — 12 GFN2-xTB quantum chemistry features (HOMO/LUMO, dipole, charges); calls `third_party/xtb/compute_xtb.py` via subprocess in the `xtb` conda env
   - New representations must be instantiated and registered in `src/data_tools/inputs.py`
 
 **Extending the pipeline**:
@@ -78,7 +83,7 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 - `data/train_split.csv`, `data/val_split.csv` — canonical 90/10 split used by `evaluate-models`
 - `data/features/` — cached `.npy` feature arrays
 
-**Dependencies**: Runtime deps in `requirements.txt` (torch, rdkit, scikit-learn, xgboost, chemprop, tabicl, tabpfn, unimol_tools, etc.). The `cuml-cu12` GPU dep is commented out and not installed by default.
+**Dependencies**: Runtime deps in `requirements.txt` (torch, rdkit, scikit-learn, xgboost, chemprop, tabicl, tabpfn, unimol_tools, jazzy, etc.). `xtb-python` is not on PyPI — install via the `xtb` conda env (`third_party/xtb/environment.yml`). cuML GPU acceleration is available for CUDA 13; install `cuml-cu13` and `cupy-cuda13x` and ensure `libcudart.so.13` is on `LD_LIBRARY_PATH`.
 
 **Testing constraints**:
 - Test markers: `unit`, `integration`, `spark`, `gpu`, `slow`, `notebooks`. Default run excludes `integration` and `spark`.

@@ -1,3 +1,6 @@
 [submodule "third_party/mole"]
 	path = third_party/mole
 	url = https://github.com/dschlesinger/MolE.git
+[submodule "third_party/xtb"]
+	path = third_party/xtb
+	url = https://github.com/dschlesinger/openadmet-xtb.git

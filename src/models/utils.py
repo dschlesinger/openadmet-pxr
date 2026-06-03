@@ -9,9 +9,15 @@ import torch
 def make_pca(n_components: int):
     """Return a GPU-accelerated PCA (cuML) if CUDA is available, else sklearn randomized PCA."""
     if torch.cuda.is_available():
-        from cuml.decomposition import PCA as CumlPCA
-        return CumlPCA(n_components=n_components)
+        try:
+            from cuml.decomposition import PCA as CumlPCA
+
+            return CumlPCA(n_components=n_components)
+        except ImportError as e:
+            print("cuML not found; falling back to CPU PCA.", str(e))
+            pass
     from sklearn.decomposition import PCA
+
     return PCA(n_components=n_components, svd_solver="randomized")
 
 

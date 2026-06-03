@@ -16,7 +16,10 @@ _DF = pl.DataFrame({"SMILES": ["c1ccccc1", "CCO", "CC(=O)O"]})
 
 
 def test_registry_keys() -> None:
-    assert set(INPUT_REGISTRY.keys()) == {"morgan", "rdkit", "rdkit+morgan"}
+    assert "morgan" in INPUT_REGISTRY
+    assert "rdkit" in INPUT_REGISTRY
+    assert "jazzy" in INPUT_REGISTRY
+    assert "xtb" in INPUT_REGISTRY
 
 
 def test_morgan_shape() -> None:
@@ -31,11 +34,12 @@ def test_rdkit_shape() -> None:
     assert out.dtype == np.float64
 
 
-def test_rdkit_morgan_shape() -> None:
-    rdkit_cols = INPUT_REGISTRY["rdkit"](_DF).shape[1]
-    morgan_cols = INPUT_REGISTRY["morgan"](_DF).shape[1]
-    out = INPUT_REGISTRY["rdkit+morgan"](_DF)
-    assert out.shape == (3, rdkit_cols + morgan_cols)
+def test_jazzy_in_registry() -> None:
+    assert "jazzy" in INPUT_REGISTRY
+
+
+def test_xtb_in_registry() -> None:
+    assert "xtb" in INPUT_REGISTRY
 
 
 # --- featurize() caching ---

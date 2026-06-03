@@ -9,6 +9,7 @@ scipy
 rdkit
 tqdm
 scikit-learn
+numpy>=2.0
 xgboost
 chemprop>=2.2.0
 pysr
@@ -16,6 +17,8 @@ tabicl
 tabpfn
 unimol_tools
 umap-learn
+jazzy
+# xtb — install via conda: conda install -c conda-forge xtb-python
 
 # For gpu only
 # Move to seperate file later
