@@ -24,7 +24,7 @@
 ## Representations
 - [x] CheMeleon finetuning — `scripts/finetune_chemeleon.py` + `chemeleon.py::FinetunedChemeleonFingerprint`
 - [x] UniMol finetuning — `scripts/finetune_unimol.py` exists; representation class not yet wired up
-- [ ] MACCS keys (167-bit) — ~90% non-overlapping activity cliff pairs vs. Morgan alone
+- [x] MACCS keys (167-bit) — ~90% non-overlapping activity cliff pairs vs. Morgan alone
 - [ ] Count-based and chiral Morgan fingerprints — `GetHashedMorganFingerprint(useCounts=True, useChirality=True)`
 - [ ] PXR-specific SMARTS features — ~17–53 binary/continuous features encoding PXR pocket preferences (sulfonamide, CF3, hydrophobic volume, PSA)
 - [ ] PXR co-crystal ligand Tanimoto similarity — 5 ECFP4 features (max, mean, std, top2, top3) vs. 56 PDB co-crystal ligands

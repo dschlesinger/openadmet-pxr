@@ -1,14 +1,33 @@
-"""Morgan (ECFP) fingerprint representation."""
+"""Morgan (ECFP) and MACCS keys fingerprint representations."""
 
 from typing import ClassVar
 
 import numpy as np
 import polars as pl
 from rdkit import Chem
-from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem import MACCSkeys, rdFingerprintGenerator
 from tqdm import tqdm
 
 from representations.base import Representation
+
+
+class MACCSKeysFingerprint(Representation):
+    """167-bit MACCS structural keys fingerprints.
+
+    Invalid SMILES produce an all-zero vector.
+    """
+
+    name: ClassVar[str] = "maccs"
+
+    def transform(self, smiles: pl.Series) -> np.ndarray:
+        """Return a (n_molecules, 167) uint8 array of MACCS keys fingerprints."""
+        out = np.zeros((len(smiles), 167), dtype=np.uint8)
+        for i, smi in enumerate(tqdm(smiles.to_list(), desc="MACCS keys", unit="mol", leave=True)):
+            mol = Chem.MolFromSmiles(smi)
+            if mol is not None:
+                fp = MACCSkeys.GenMACCSKeys(mol)
+                out[i] = np.frombuffer(fp.ToBitString().encode(), dtype=np.uint8) - ord("0")
+        return out
 
 
 class MorganFingerprint(Representation):

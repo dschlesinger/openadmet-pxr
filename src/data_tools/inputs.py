@@ -9,7 +9,7 @@ import polars as pl
 
 from representations.chemeleon import ChemeleonFingerprint, FinetunedChemeleonFingerprint
 from representations.chemprop_rep import ChempropFingerprint
-from representations.fingerprints import MorganFingerprint
+from representations.fingerprints import MACCSKeysFingerprint, MorganFingerprint
 from representations.jazzy_descriptors import JazzyDescriptors
 from representations.mole import MolERepresentation
 from representations.rdkit_descriptors import RDKitDescriptors
@@ -18,6 +18,7 @@ from representations.unimol_finetuned import FinetunedUniMolRepresentation
 from representations.xtb_descriptors import XTBDescriptors
 
 _morgan = MorganFingerprint()
+_maccs = MACCSKeysFingerprint()
 _rdkit = RDKitDescriptors()
 _chemeleon = ChemeleonFingerprint()
 _chemprop = ChempropFingerprint()
@@ -31,6 +32,10 @@ _xtb = XTBDescriptors()
 
 def _morgan_features(df: pl.DataFrame) -> np.ndarray:
     return _morgan.transform(df["SMILES"]).astype(np.float64)
+
+
+def _maccs_features(df: pl.DataFrame) -> np.ndarray:
+    return _maccs.transform(df["SMILES"]).astype(np.float64)
 
 
 def _rdkit_features(df: pl.DataFrame) -> np.ndarray:
@@ -71,6 +76,7 @@ def _xtb_features(df: pl.DataFrame) -> np.ndarray:
 
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     _morgan.name: _morgan_features,
+    _maccs.name: _maccs_features,
     _rdkit.name: _rdkit_features,
     _chemeleon.name: _chemeleon_features,
     _chemprop.name: _chemprop_features,
