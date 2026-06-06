@@ -2,6 +2,7 @@ data
 results
 viz
 checkpoints
+structures
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
