@@ -57,10 +57,11 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
   - `validate_submission.py` — checks a results CSV for required columns, row count (513), no NaNs/infs, no duplicate molecule names
 
 - `src/models/` — model layer
-  - `base.py` — `PXRModel` (ABC): subclasses must set `name: ClassVar[str]` and implement `fit(X, y)` / `predict(X)`. `PXRPreConfigModel` is a subclass for models that fix their own representation via `required_representations: ClassVar[list[str]]`.
-  - `__init__.py` — `REGISTRY` and `PRECONFIG_REGISTRY` dicts mapping name → class; add new models here
+  - `base.py` — `PXRModel` (ABC): subclasses must set `name: ClassVar[str]` and implement `fit(X, y)` / `predict(X)` on feature matrices. `MetaModel` (ABC) is for DataFrame-aware models that featurize internally: `fit(train_df, cache_dir)` / `predict(df, cache_dir)`.
+  - `__init__.py` — `REGISTRY` (PXRModel) and `META_REGISTRY` (MetaModel) dicts mapping name → class; add new models here
   - Individual model files: `baseline.py`, `decision_tree.py`, `knn.py`, `linear_regression.py`, `mlp.py`, `symbolic_regression.py`, `tabicl_model.py`, `tabpfn_model.py`, `xgboost_model.py`, `one_each_dim.py`, `delta_model.py`
   - `delta_model.py` — `DeltaModel`: pairwise delta regressor. Siamese MLP encoder + concat head predicts ΔpEC50 between molecule pairs; trains on sampled pairs (cliff pairs oversampled 3×), anchors test predictions to cosine-kNN training neighbors with antisymmetry averaging, abstains (outputs 0) when < 5 neighbors within the similarity cutoff. Representation-agnostic; adapts ldbc1999 (rank 65)
+  - `stacked_ensemble.py` — `StackedEnsemble` (a `MetaModel`, registered in `META_REGISTRY`): two-level stack. Level-0 roster of (model × representation) base learners; level-1 `ElasticNetCV` meta-learner trained on Butina grouped-K-fold OOF predictions + uncertainty meta-features (Tanimoto NN similarity, base-model disagreement, delta coverage flag). Featurize-once + row-slice OOF, median-imputes NaNs. Run via `evaluate-models --meta stacked_ensemble` / `generate-results --meta stacked_ensemble`.
   - `evaluate.py` — CLI (`evaluate-models`): fits each model on train features, scores on val, prints a metrics table
   - `predict.py` — CLI (`generate-results`): fits on full train, predicts test, writes `results/<model>_submission.csv` + a distribution plot PNG
   - `score_table.py` — CLI (`score-table`): cross-tabulates every input × every model
@@ -77,7 +78,7 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 
 - **New model**: subclass `PXRModel` in a new file under `src/models/`, set a unique `name`, add to `REGISTRY` in `src/models/__init__.py`.
 - **New representation**: subclass `Representation` in `src/representations/`, add an instance + featurize function to `INPUT_REGISTRY` in `src/data_tools/inputs.py`.
-- **PreConfig model** (fixed representation): subclass `PXRPreConfigModel`, set `required_representations`, add to `PRECONFIG_REGISTRY`.
+- **Meta-model** (manages its own featurization / multi-representation stacking): subclass `MetaModel` (`fit(train_df, cache_dir)` / `predict(df, cache_dir)`), add to `META_REGISTRY` in `src/models/__init__.py`; run with `evaluate-models --meta <name>` / `generate-results --meta <name>`.
 
 **Data files** (not committed, created by `download-data`):
 - `data/train.csv`, `data/test.csv`, `data/test_unblinded.csv`, `data/counter_train.csv`, `data/single_concentration_train.csv` — raw HuggingFace splits

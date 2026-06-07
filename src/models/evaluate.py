@@ -10,7 +10,7 @@ import polars as pl
 from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from data_tools.load import load_data
-from models import REGISTRY, PXRModel, PRECONFIG_REGISTRY, PXRPreConfigModel
+from models import REGISTRY, PXRModel, META_REGISTRY, MetaModel
 from models.utils import drop_nan_rows
 
 
@@ -49,14 +49,15 @@ def _resolve_models(names: list[str]) -> list[type[PXRModel]]:
         raise ValueError(f"Unknown models: {unknown}. Available: {list(REGISTRY.keys())}")
     return [REGISTRY[n] for n in names]
 
-def _resolve_preconfigs(names: list[str]) -> list[type[PXRPreConfigModel]]:
-    """Return preconfigured model classes for the given names, or all registered preconfigured models if names == ['all']."""
+
+def _resolve_metas(names: list[str]) -> list[type[MetaModel]]:
+    """Return meta-model classes for the given names, or all registered meta-models if names == ['all']."""
     if names == ["all"]:
-        return list(PRECONFIG_REGISTRY.values())
-    unknown = [n for n in names if n not in PRECONFIG_REGISTRY]
+        return list(META_REGISTRY.values())
+    unknown = [n for n in names if n not in META_REGISTRY]
     if unknown:
-        raise ValueError(f"Unknown models: {unknown}. Available: {list(PRECONFIG_REGISTRY.keys())}")
-    return [PRECONFIG_REGISTRY[n] for n in names]
+        raise ValueError(f"Unknown meta-models: {unknown}. Available: {list(META_REGISTRY.keys())}")
+    return [META_REGISTRY[n] for n in names]
 
 
 def _resolve_inputs(names: list[str]) -> None:
@@ -86,7 +87,12 @@ def main() -> None:
     parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory containing data CSVs")
     parser.add_argument("--val-split", type=float, default=0.2, help="Val fraction for scaffold split")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for scaffold split")
-    parser.add_argument("--preconfigs", nargs="+", default=[], help="Names of preconfigured models, default is none")
+    parser.add_argument(
+        "--meta",
+        nargs="+",
+        default=[],
+        help=f"DataFrame-aware meta-models to evaluate (featurize internally). Available: {list(META_REGISTRY.keys())}",
+    )
     parser.add_argument("--models", nargs="+", default=[], help="Model names to evaluate, or omit for all")
     parser.add_argument("--target", default="pEC50", help="Target column to predict")
     parser.add_argument(
@@ -141,17 +147,15 @@ def main() -> None:
         print(f"--val-split must be in (0, 1), got {args.val_split}", file=sys.stderr)
         sys.exit(1)
 
-    # If both models and preconfigs empty then assume all models and preconfigs
-    if not args.models and not args.preconfigs:
+    # If both models and meta-models empty then evaluate all of both.
+    if not args.models and not args.meta:
         args.models = ["all"]
-        args.preconfigs = ["all"]
+        args.meta = ["all"]
 
     try:
         model_classes = _resolve_models(args.models)
-        preconfig_classes = _resolve_preconfigs(args.preconfigs)
+        meta_classes = _resolve_metas(args.meta)
         _resolve_inputs(args.input)
-        for cls in preconfig_classes:
-            _resolve_inputs(cls.required_repersentations)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
@@ -189,14 +193,16 @@ def main() -> None:
 
     results = [(cls.name, _evaluate_model(cls(), X_train, y_train, X_val, y_val)) for cls in model_classes]
 
-    for cls in preconfig_classes:
-        X_train_pc, y_train_pc = drop_nan_rows(
-            featurize(train_df, cls.required_repersentations, cache_dir), train_df[args.target].to_numpy()
+    # Meta-models featurize internally from the DataFrames and run their own CV.
+    for cls in meta_classes:
+        model = cls()
+        model.fit(train_df, cache_dir)
+        preds = model.predict(val_df, cache_dir)
+        metrics = _compute_metrics(
+            pl.Series("actual", val_df[args.target].to_list()),
+            pl.Series("prediction", preds.tolist()),
         )
-        X_val_pc, y_val_pc = drop_nan_rows(
-            featurize(val_df, cls.required_repersentations, cache_dir), val_df[args.target].to_numpy()
-        )
-        results.append((cls.name, _evaluate_model(cls(), X_train_pc, y_train_pc, X_val_pc, y_val_pc)))
+        results.append((cls.name, metrics))
     reverse = args.sort_by == "R2"
     results.sort(key=lambda r: r[1][args.sort_by], reverse=reverse)
     filter_info = f"  filter={args.filter}" if args.filter else ""

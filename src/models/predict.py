@@ -11,7 +11,7 @@ import polars as pl
 from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
 from data_tools.load import _assemble_pool
-from models import REGISTRY, PRECONFIG_REGISTRY
+from models import REGISTRY, META_REGISTRY
 from models.utils import drop_nan_rows
 
 
@@ -42,7 +42,9 @@ def _generate(
     if filter_fn is not None:
         train_df = filter_fn(train_df, test_df)
 
-    X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train")
+    X_train, y_train = drop_nan_rows(
+        featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train"
+    )
 
     X_test_raw = featurize(test_df, input_names, cache_dir)
     valid_mask = ~np.isnan(X_test_raw).any(axis=1)
@@ -66,7 +68,7 @@ def _generate(
     return result
 
 
-def _generate_preconfig(
+def _generate_meta(
     train_path: Path,
     test_path: Path,
     model_name: str,
@@ -76,12 +78,15 @@ def _generate_preconfig(
     filter_fn=None,
     train_df: pl.DataFrame | None = None,
 ) -> pl.DataFrame:
-    """Fit a preconfigured model on train data, predict on test data, write submission CSV."""
-    if model_name not in PRECONFIG_REGISTRY:
-        raise ValueError(f"Unknown preconfig model: {model_name!r}. Available: {list(PRECONFIG_REGISTRY.keys())}")
+    """Fit a DataFrame-aware meta-model on train data, predict test, write submission CSV.
 
-    cls = PRECONFIG_REGISTRY[model_name]
-    input_names = cls.required_repersentations
+    Meta-models featurize internally and median-impute, so there is no NaN row
+    dropping here — every test molecule receives a prediction.
+    """
+    if model_name not in META_REGISTRY:
+        raise ValueError(f"Unknown meta-model: {model_name!r}. Available: {list(META_REGISTRY.keys())}")
+
+    cls = META_REGISTRY[model_name]
 
     if train_df is None:
         train_df = pl.read_csv(train_path)
@@ -92,26 +97,18 @@ def _generate_preconfig(
     if filter_fn is not None:
         train_df = filter_fn(train_df, test_df)
 
-    X_train, y_train = drop_nan_rows(featurize(train_df, input_names, cache_dir), train_df[target].to_numpy(), label="train")
-
-    X_test_raw = featurize(test_df, input_names, cache_dir)
-    valid_mask = ~np.isnan(X_test_raw).any(axis=1)
-    n_dropped = int((~valid_mask).sum())
-    if n_dropped > 0:
-        print(f"Dropped {n_dropped} of {len(test_df)} test molecules with NaN features")
-    X_test = X_test_raw[valid_mask]
-    test_df_clean = test_df.filter(pl.Series(valid_mask.tolist()))
-
     model = cls()
-    model.fit(X_train, y_train)
-    preds = model.predict(X_test)
+    model.fit(train_df, cache_dir)
+    preds = np.asarray(model.predict(test_df, cache_dir))
 
-    result = test_df_clean.select(["Molecule Name", "SMILES"]).with_columns(pl.Series(target, preds.tolist()))
+    result = test_df.select(["Molecule Name", "SMILES"]).with_columns(pl.Series(target, preds.tolist()))
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.write_csv(output_path)
     print(f"Wrote {len(result)} rows -> {output_path}")
     _print_prediction_summary(preds, target)
+    y_train = train_df[target].to_numpy()
+    y_train = y_train[np.isfinite(y_train)]
     _plot_prediction_distribution(preds, y_train, target, output_path)
     return result
 
@@ -132,9 +129,7 @@ def _print_prediction_summary(preds: np.ndarray, target: str) -> None:
     print(f"  max    : {p.max():.4f}")
 
 
-def _plot_prediction_distribution(
-    preds: np.ndarray, y_train: np.ndarray, target: str, output_path: Path
-) -> None:
+def _plot_prediction_distribution(preds: np.ndarray, y_train: np.ndarray, target: str, output_path: Path) -> None:
     """Save an overlaid density histogram comparing predictions to the training distribution."""
     p = preds.astype(float)
     t = y_train.astype(float)
@@ -143,7 +138,9 @@ def _plot_prediction_distribution(
 
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.hist(t, bins=bins, density=True, alpha=0.5, label=f"train (n={len(t)}, mean={t.mean():.2f}, std={t.std():.2f})")
-    ax.hist(p, bins=bins, density=True, alpha=0.5, label=f"predicted (n={len(p)}, mean={p.mean():.2f}, std={p.std():.2f})")
+    ax.hist(
+        p, bins=bins, density=True, alpha=0.5, label=f"predicted (n={len(p)}, mean={p.mean():.2f}, std={p.std():.2f})"
+    )
     ax.axvline(t.mean(), color="C0", linestyle="--", linewidth=1.2)
     ax.axvline(p.mean(), color="C1", linestyle="--", linewidth=1.2)
     ax.set_xlabel(target)
@@ -168,9 +165,9 @@ def main() -> None:
         help=f"Model name to use. Available: {list(REGISTRY.keys())}",
     )
     parser.add_argument(
-        "--preconfig",
+        "--meta",
         default=None,
-        help=f"Preconfigured model name (uses its own representations). Available: {list(PRECONFIG_REGISTRY.keys())}",
+        help=f"Meta-model name (featurizes internally, runs its own CV). Available: {list(META_REGISTRY.keys())}",
     )
     parser.add_argument(
         "--input",
@@ -204,9 +201,7 @@ def main() -> None:
     train_override: pl.DataFrame | None = None
     if args.include_unblinded:
         train_override = _assemble_pool(include_unblinded=True, data_dir=Path(args.train_path).parent)
-        unblinded_smiles = set(
-            pl.read_csv(Path(args.train_path).parent / "test_unblinded.csv")["SMILES"].to_list()
-        )
+        unblinded_smiles = set(pl.read_csv(Path(args.train_path).parent / "test_unblinded.csv")["SMILES"].to_list())
         test_smiles = set(pl.read_csv(args.test_path)["SMILES"].to_list())
         n_contaminated = len(unblinded_smiles & test_smiles)
         print(
@@ -219,13 +214,13 @@ def main() -> None:
     filter_tag = f"_{args.filter}" if args.filter else ""
 
     try:
-        if args.preconfig is not None:
-            default_name = f"{args.preconfig}{filter_tag}_submission.csv"
+        if args.meta is not None:
+            default_name = f"{args.meta}{filter_tag}_submission.csv"
             output = Path(args.output) if args.output else Path("results") / default_name
-            _generate_preconfig(
+            _generate_meta(
                 Path(args.train_path),
                 Path(args.test_path),
-                args.preconfig,
+                args.meta,
                 args.target,
                 output,
                 cache_dir,
