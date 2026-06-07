@@ -59,7 +59,8 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 - `src/models/` — model layer
   - `base.py` — `PXRModel` (ABC): subclasses must set `name: ClassVar[str]` and implement `fit(X, y)` / `predict(X)`. `PXRPreConfigModel` is a subclass for models that fix their own representation via `required_representations: ClassVar[list[str]]`.
   - `__init__.py` — `REGISTRY` and `PRECONFIG_REGISTRY` dicts mapping name → class; add new models here
-  - Individual model files: `baseline.py`, `decision_tree.py`, `knn.py`, `linear_regression.py`, `mlp.py`, `symbolic_regression.py`, `tabicl_model.py`, `tabpfn_model.py`, `xgboost_model.py`, `one_each_dim.py`
+  - Individual model files: `baseline.py`, `decision_tree.py`, `knn.py`, `linear_regression.py`, `mlp.py`, `symbolic_regression.py`, `tabicl_model.py`, `tabpfn_model.py`, `xgboost_model.py`, `one_each_dim.py`, `delta_model.py`
+  - `delta_model.py` — `DeltaModel`: pairwise delta regressor. Siamese MLP encoder + concat head predicts ΔpEC50 between molecule pairs; trains on sampled pairs (cliff pairs oversampled 3×), anchors test predictions to cosine-kNN training neighbors with antisymmetry averaging, abstains (outputs 0) when < 5 neighbors within the similarity cutoff. Representation-agnostic; adapts ldbc1999 (rank 65)
   - `evaluate.py` — CLI (`evaluate-models`): fits each model on train features, scores on val, prints a metrics table
   - `predict.py` — CLI (`generate-results`): fits on full train, predicts test, writes `results/<model>_submission.csv` + a distribution plot PNG
   - `score_table.py` — CLI (`score-table`): cross-tabulates every input × every model

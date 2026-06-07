@@ -7,6 +7,7 @@ set a unique `name` class variable, and add it here.
 from models.base import PXRModel, PXRPreConfigModel
 from models.baseline import MeanBaseline, MedianBaseline
 from models.decision_tree import DecisionTree
+from models.delta_model import DeltaModel
 from models.knn import KNN
 from models.linear_regression import LinearRegression
 from models.mlp import MLP
@@ -29,6 +30,7 @@ REGISTRY: dict[str, type[PXRModel]] = {
     TabPFN.name: TabPFN,
     # KAN.name: KAN,
     XGBoost.name: XGBoost,
+    DeltaModel.name: DeltaModel,
 }
 
 PRECONFIG_REGISTRY: dict[str, type[PXRPreConfigModel]] = {

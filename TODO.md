@@ -17,7 +17,7 @@
 - [ ] PMI shape descriptors (19 RDKit conformer-derived features) as `x_d` — captures 3D shape orthogonal to 2D topology
 
 ## Delta / Pairwise Models
-- [ ] Pairwise Chemprop delta model — train D-MPNN on all pairwise Δ pEC50 (input: two SMILES; target: pEC50_i − pEC50_j), oversample activity cliff pairs (Tanimoto ≥ 0.7, |Δ pEC50| ≥ 1.0) 3×, anchor test predictions to 10 nearest training neighbors via the learned delta; ldbc1999 (rank 65) — works only when training coverage is dense (90.8% of test compounds had no neighbor within Tanimoto ≥ 0.7, yielding Spearman = −0.071)
+- [x] Pairwise delta model — `delta_model.py::DeltaModel`; Siamese MLP encoder + concat delta head over any representation (dynamic input), L1 loss, activity-cliff pairs (cosine ≥ 0.7, |Δ pEC50| ≥ 1.0) oversampled 3×, k=10 antisymmetric cosine-kNN anchoring, abstains (outputs 0) when < 5 neighbors within cutoff. Adapts ldbc1999 (rank 65): D-MPNN→MLP encoder, Tanimoto→cosine. Built as an ensemble component (standalone Spearman was −0.071 because 90.8% of test had no near neighbor; the abstention gate + downstream stacker absorb out-of-coverage compounds)
 
 ## Ensemble / Stacking
 - [ ] Ridge or ElasticNetCV meta-learner on OOF predictions — replace simple average in `OneofEachDim`; fit stacker on out-of-fold preds only

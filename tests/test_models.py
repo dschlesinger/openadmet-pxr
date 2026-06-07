@@ -1,4 +1,5 @@
 """Tests for the models package."""
+
 from __future__ import annotations
 
 import sys
@@ -9,6 +10,7 @@ import pytest
 
 from models import REGISTRY, PXRModel
 from models.baseline import MeanBaseline, MedianBaseline
+from models.delta_model import DeltaModel
 from models.evaluate import (
     _compute_metrics,
     _evaluate_model,
@@ -37,11 +39,13 @@ def data_dir(tmp_path: object, small_df: pl.DataFrame) -> object:
     train_path = tmp_path / "train.csv"  # type: ignore[operator]
     unblinded_path = tmp_path / "test_unblinded.csv"  # type: ignore[operator]
     pl.DataFrame({"SMILES": smiles[:7], "pEC50": [float(i) for i in range(7)]}).write_csv(train_path)
-    pl.DataFrame({
-        "SMILES": smiles[7:],
-        "pEC50": [float(i) for i in range(3)],
-        "OCNT Batch": [f"OCNT-{i:04d}-01" for i in range(3)],
-    }).write_csv(unblinded_path)
+    pl.DataFrame(
+        {
+            "SMILES": smiles[7:],
+            "pEC50": [float(i) for i in range(3)],
+            "OCNT Batch": [f"OCNT-{i:04d}-01" for i in range(3)],
+        }
+    ).write_csv(unblinded_path)
     return tmp_path
 
 
@@ -172,10 +176,23 @@ def test_print_results(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_all_models(
-    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    data_dir: object,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
-        sys, "argv", ["evaluate-models", "--data-dir", str(data_dir), "--cache-dir", str(data_dir) + "/cache", "--models", "mean_baseline", "median_baseline"]
+        sys,
+        "argv",
+        [
+            "evaluate-models",
+            "--data-dir",
+            str(data_dir),
+            "--cache-dir",
+            str(data_dir) + "/cache",
+            "--models",
+            "mean_baseline",
+            "median_baseline",
+        ],
     )
     main()
     out = capsys.readouterr().out
@@ -184,12 +201,22 @@ def test_main_all_models(
 
 
 def test_main_specific_model(
-    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    data_dir: object,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--cache-dir", str(data_dir) + "/cache"],
+        [
+            "evaluate-models",
+            "--data-dir",
+            str(data_dir),
+            "--models",
+            "mean_baseline",
+            "--cache-dir",
+            str(data_dir) + "/cache",
+        ],
     )
     main()
     out = capsys.readouterr().out
@@ -197,19 +224,34 @@ def test_main_specific_model(
 
 
 def test_main_custom_input(
-    monkeypatch: pytest.MonkeyPatch, data_dir: object, capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    data_dir: object,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr(
         sys,
         "argv",
-        ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--input", "rdkit", "morgan", "--cache-dir", str(data_dir) + "/cache"],
+        [
+            "evaluate-models",
+            "--data-dir",
+            str(data_dir),
+            "--models",
+            "mean_baseline",
+            "--input",
+            "rdkit",
+            "morgan",
+            "--cache-dir",
+            str(data_dir) + "/cache",
+        ],
     )
     main()
     assert "mean_baseline" in capsys.readouterr().out
 
 
 def test_main_bad_val_split(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--scaffold-split", "--data-dir", str(tmp_path), "--val-split", "0.0"])
+    monkeypatch.setattr(
+        sys, "argv", ["evaluate-models", "--scaffold-split", "--data-dir", str(tmp_path), "--val-split", "0.0"]
+    )
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
@@ -230,9 +272,14 @@ def test_main_unknown_input(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -
 
 
 def test_main_missing_target(
-    monkeypatch: pytest.MonkeyPatch, data_dir: object,
+    monkeypatch: pytest.MonkeyPatch,
+    data_dir: object,
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--target", "no_column"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evaluate-models", "--data-dir", str(data_dir), "--models", "mean_baseline", "--target", "no_column"],
+    )
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
@@ -243,7 +290,9 @@ def test_main_missing_target(
 
 @pytest.fixture()
 def predict_dfs(tmp_path: object) -> tuple[object, object]:
-    train = pl.DataFrame({"Molecule Name": ["A", "B", "C"], "SMILES": ["c1ccccc1", "CCO", "CCC"], "pEC50": [5.0, 6.0, 7.0]})
+    train = pl.DataFrame(
+        {"Molecule Name": ["A", "B", "C"], "SMILES": ["c1ccccc1", "CCO", "CCC"], "pEC50": [5.0, 6.0, 7.0]}
+    )
     test = pl.DataFrame({"Molecule Name": ["D", "E"], "SMILES": ["CCCC", "c1ccncc1"]})
     train_path = tmp_path / "train.csv"  # type: ignore[operator]
     test_path = tmp_path / "test.csv"  # type: ignore[operator]
@@ -258,7 +307,15 @@ def test_generate_writes_csv(tmp_path: object, predict_dfs: tuple[object, object
     from pathlib import Path
 
     cache = tmp_path / "cache"  # type: ignore[operator]
-    result = _generate(Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["morgan"], "pEC50", Path(str(out)), Path(str(cache)))
+    result = _generate(
+        Path(str(train_path)),
+        Path(str(test_path)),
+        "mean_baseline",
+        ["morgan"],
+        "pEC50",
+        Path(str(out)),
+        Path(str(cache)),
+    )
     assert out.exists()  # type: ignore[union-attr]
     assert "Molecule Name" in result.columns
     assert "SMILES" in result.columns
@@ -272,8 +329,13 @@ def test_generate_unknown_model(tmp_path: object, predict_dfs: tuple[object, obj
 
     with pytest.raises(ValueError, match="Unknown model"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "no_such_model", ["morgan"], "pEC50",
-            Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
+            Path(str(train_path)),
+            Path(str(test_path)),
+            "no_such_model",
+            ["morgan"],
+            "pEC50",
+            Path(str(tmp_path / "out.csv")),
+            Path(str(tmp_path / "cache")),  # type: ignore[operator]
         )
 
 
@@ -283,8 +345,13 @@ def test_generate_unknown_input(tmp_path: object, predict_dfs: tuple[object, obj
 
     with pytest.raises(ValueError, match="Unknown input"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["no_input"], "pEC50",
-            Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
+            Path(str(train_path)),
+            Path(str(test_path)),
+            "mean_baseline",
+            ["no_input"],
+            "pEC50",
+            Path(str(tmp_path / "out.csv")),
+            Path(str(tmp_path / "cache")),  # type: ignore[operator]
         )
 
 
@@ -294,8 +361,13 @@ def test_generate_missing_target(tmp_path: object, predict_dfs: tuple[object, ob
 
     with pytest.raises(ValueError, match="Target"):
         _generate(
-            Path(str(train_path)), Path(str(test_path)), "mean_baseline", ["morgan"], "no_col",
-            Path(str(tmp_path / "out.csv")), Path(str(tmp_path / "cache"))  # type: ignore[operator]
+            Path(str(train_path)),
+            Path(str(test_path)),
+            "mean_baseline",
+            ["morgan"],
+            "no_col",
+            Path(str(tmp_path / "out.csv")),
+            Path(str(tmp_path / "cache")),  # type: ignore[operator]
         )
 
 
@@ -303,40 +375,10 @@ def test_generate_missing_target(tmp_path: object, predict_dfs: tuple[object, ob
 
 
 def test_predict_main_explicit_output(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object], capsys: pytest.CaptureFixture[str]
-) -> None:
-    train_path, test_path = predict_dfs
-    out = tmp_path / "result.csv"  # type: ignore[operator]
-    cache = tmp_path / "cache"  # type: ignore[operator]
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path),
-         "--output", str(out), "--cache-dir", str(cache)],
-    )
-    predict_main()
-    assert out.exists()  # type: ignore[union-attr]
-    assert "Wrote" in capsys.readouterr().out
-
-
-def test_predict_main_default_output(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object], capsys: pytest.CaptureFixture[str]
-) -> None:
-    train_path, test_path = predict_dfs
-    cache = tmp_path / "cache"  # type: ignore[operator]
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path),
-         "--cache-dir", str(cache)],
-    )
-    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
-    predict_main()
-    assert "Wrote" in capsys.readouterr().out
-
-
-def test_predict_main_custom_input(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object], capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: object,
+    predict_dfs: tuple[object, object],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     train_path, test_path = predict_dfs
     out = tmp_path / "result.csv"  # type: ignore[operator]
@@ -346,18 +388,72 @@ def test_predict_main_custom_input(
         "argv",
         [
             "generate-results",
-            "--train-path", str(train_path),
-            "--test-path", str(test_path),
-            "--input", "rdkit",
-            "--output", str(out),
-            "--cache-dir", str(cache),
+            "--train-path",
+            str(train_path),
+            "--test-path",
+            str(test_path),
+            "--output",
+            str(out),
+            "--cache-dir",
+            str(cache),
+        ],
+    )
+    predict_main()
+    assert out.exists()  # type: ignore[union-attr]
+    assert "Wrote" in capsys.readouterr().out
+
+
+def test_predict_main_default_output(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: object,
+    predict_dfs: tuple[object, object],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    train_path, test_path = predict_dfs
+    cache = tmp_path / "cache"  # type: ignore[operator]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate-results", "--train-path", str(train_path), "--test-path", str(test_path), "--cache-dir", str(cache)],
+    )
+    monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
+    predict_main()
+    assert "Wrote" in capsys.readouterr().out
+
+
+def test_predict_main_custom_input(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: object,
+    predict_dfs: tuple[object, object],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    train_path, test_path = predict_dfs
+    out = tmp_path / "result.csv"  # type: ignore[operator]
+    cache = tmp_path / "cache"  # type: ignore[operator]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate-results",
+            "--train-path",
+            str(train_path),
+            "--test-path",
+            str(test_path),
+            "--input",
+            "rdkit",
+            "--output",
+            str(out),
+            "--cache-dir",
+            str(cache),
         ],
     )
     predict_main()
     assert "Wrote" in capsys.readouterr().out
 
 
-def test_predict_main_unknown_model(monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+def test_predict_main_unknown_model(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]
+) -> None:
     train_path, test_path = predict_dfs
     monkeypatch.setattr(
         sys,
@@ -369,7 +465,9 @@ def test_predict_main_unknown_model(monkeypatch: pytest.MonkeyPatch, tmp_path: o
     assert exc.value.code == 1
 
 
-def test_predict_main_unknown_input(monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+def test_predict_main_unknown_input(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]
+) -> None:
     train_path, test_path = predict_dfs
     monkeypatch.setattr(
         sys,
@@ -381,7 +479,9 @@ def test_predict_main_unknown_input(monkeypatch: pytest.MonkeyPatch, tmp_path: o
     assert exc.value.code == 1
 
 
-def test_predict_main_missing_target(monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]) -> None:
+def test_predict_main_missing_target(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, predict_dfs: tuple[object, object]
+) -> None:
     train_path, test_path = predict_dfs
     monkeypatch.setattr(
         sys,
@@ -391,3 +491,69 @@ def test_predict_main_missing_target(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     with pytest.raises(SystemExit) as exc:
         predict_main()
     assert exc.value.code == 1
+
+
+# --- DeltaModel ---
+
+
+def _clustered_xy() -> tuple[np.ndarray, np.ndarray]:
+    """Two well-separated direction clusters with distinct pEC50 levels.
+
+    Cluster A (rows 0-5) points along [1,1,1,0], pEC50 ~5; cluster B (rows 6-9)
+    along [0,0,1,1], pEC50 ~2. Small noise keeps every column non-constant.
+    """
+    rng = np.random.default_rng(0)
+    a = np.array([1.0, 1.0, 1.0, 0.0])
+    b = np.array([0.0, 0.0, 1.0, 1.0])
+    rows = [a * c + rng.normal(0, 0.01, 4) for c in (1, 2, 3, 4, 5, 6)]
+    rows += [b * c + rng.normal(0, 0.01, 4) for c in (1, 2, 3, 4)]
+    X = np.asarray(rows, dtype=np.float64)
+    y = np.array([5.0] * 6 + [2.0] * 4, dtype=np.float64)
+    return X, y
+
+
+def _small_delta() -> DeltaModel:
+    return DeltaModel(embedding_dim=16, epochs=3, n_pairs_per_epoch=200)
+
+
+def test_delta_registered() -> None:
+    assert "delta" in REGISTRY
+    assert REGISTRY["delta"] is DeltaModel
+
+
+def test_delta_fit_predict_shape() -> None:
+    X, y = _clustered_xy()
+    model = _small_delta()
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert preds.shape == (len(X),)
+    assert np.all(np.isfinite(preds))
+
+
+def test_delta_abstains_when_no_neighbors() -> None:
+    X, y = _clustered_xy()
+    model = _small_delta()
+    model.fit(X, y)
+    # Direction orthogonal to both clusters -> cosine ~0 < SIM_CUTOFF for every train row.
+    X_test = np.array([[1.0, -1.0, 0.0, 0.0], [1.0, 0.0, 0.0, -1.0]])
+    preds = model.predict(X_test)
+    assert np.all(preds == 0.0)
+
+
+def test_delta_recovers_neighbor_activity() -> None:
+    X, y = _clustered_xy()
+    model = _small_delta()
+    model.fit(X, y)
+    # A point in cluster A's direction is covered by its 6 neighbors (all pEC50 ~5).
+    preds = model.predict(np.array([[1.0, 1.0, 1.0, 0.0]]))
+    assert preds[0] != 0.0  # covered, not abstained
+    assert preds[0] == pytest.approx(5.0, abs=1.0)
+
+
+def test_find_cliff_pairs_detects_obvious_cliff() -> None:
+    # Rows 0,1 share a direction but differ in pEC50 by 2.0 -> one cliff pair.
+    X = np.array([[1.0, 1.0, 0.0], [2.0, 2.0, 0.0], [0.0, 0.0, 1.0]])
+    y = np.array([6.0, 4.0, 5.0])
+    pairs = DeltaModel()._find_cliff_pairs(X, y)
+    assert pairs.shape == (1, 2)
+    assert set(pairs[0].tolist()) == {0, 1}
