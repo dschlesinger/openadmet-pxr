@@ -66,9 +66,10 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
 
 - `src/representations/` — molecular featurizers
   - `base.py` — `Representation` (ABC): must set `name` and implement `transform(smiles: pl.Series) -> np.ndarray`
-  - Concrete implementations: `fingerprints.py` (Morgan), `rdkit_descriptors.py`, `chemeleon.py`, `chemprop_rep.py`, `unimol.py`, `mole.py`, `jazzy_descriptors.py`, `xtb_descriptors.py`
+  - Concrete implementations: `fingerprints.py` (Morgan), `rdkit_descriptors.py`, `chemeleon.py`, `chemprop_rep.py`, `unimol.py`, `mole.py`, `jazzy_descriptors.py`, `xtb_descriptors.py`, `crystal_similarity.py`
   - `jazzy_descriptors.py` — Jazzy solvation/H-bonding descriptors; requires `jazzy` (in `requirements.txt`)
   - `xtb_descriptors.py` — 12 GFN2-xTB quantum chemistry features (HOMO/LUMO, dipole, charges); calls `third_party/xtb/compute_xtb.py` via subprocess in the `xtb` conda env
+  - `crystal_similarity.py` — 20 per-receptor ECFP4 Tanimoto similarity features (max/mean/top3/std × PXR/FXR/RXRA/VDR/CAR) against co-crystal ligands. Reads reference ligands from `data/crystal_ligands.csv`, produced by `python scripts/extract_crystal_ligands.py` (parses `structures/<receptor>/bound/*.pdb`, resolves HET codes → SMILES via the RCSB chemcomp API)
   - New representations must be instantiated and registered in `src/data_tools/inputs.py`
 
 **Extending the pipeline**:
@@ -82,6 +83,7 @@ This is the **OpenADMET PXR challenge** ML pipeline for predicting Pregnane X Re
   - `test.csv` = blinded submission target (no labels); `test_unblinded.csv` = phase-1 labels released (use for evaluation)
 - `data/train_split.csv`, `data/val_split.csv` — canonical 90/10 split used by `evaluate-models`
 - `data/features/` — cached `.npy` feature arrays
+- `data/crystal_ligands.csv` — co-crystal reference ligands (receptor, het_code, smiles, name) for the `crystal_similarity` representation; created by `scripts/extract_crystal_ligands.py`
 
 **Dependencies**: Runtime deps in `requirements.txt` (torch, rdkit, scikit-learn, xgboost, chemprop, tabicl, tabpfn, unimol_tools, jazzy, etc.). `xtb-python` is not on PyPI — install via the `xtb` conda env (`third_party/xtb/environment.yml`). cuML GPU acceleration is available for CUDA 13; install `cuml-cu13` and `cupy-cuda13x` and ensure `libcudart.so.13` is on `LD_LIBRARY_PATH`.
 

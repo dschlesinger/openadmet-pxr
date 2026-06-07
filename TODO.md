@@ -30,7 +30,7 @@
 - [x] MACCS keys (167-bit) — ~90% non-overlapping activity cliff pairs vs. Morgan alone
 - [ ] Count-based and chiral Morgan fingerprints — `GetHashedMorganFingerprint(useCounts=True, useChirality=True)`
 - [ ] PXR-specific SMARTS features — ~17–53 binary/continuous features encoding PXR pocket preferences (sulfonamide, CF3, hydrophobic volume, PSA)
-- [ ] PXR co-crystal ligand Tanimoto similarity — 5 ECFP4 features (max, mean, std, top2, top3) vs. 56 PDB co-crystal ligands
+- [x] Co-crystal ligand Tanimoto similarity — `crystal_similarity.py::CrystalLigandSimilarity` + `scripts/extract_crystal_ligands.py`; 20 ECFP4 features (max/mean/top3/std × PXR/FXR/RXRA/VDR/CAR) vs. 260 PDB co-crystal ligands from `structures/<receptor>/bound/`
 - [ ] Cofolding structural features from dargason's dataset — mean/max ipTM, pTM, pLDDT, contact geometry at 3.5/4.5/5.0 Å per ligand across Chai-1/OpenFold3/Boltz2
 - [ ] UniMol randomized SMILES augmentation at inference — average predictions over 10 SMILES orderings per compound
 - [x] jazzy QM interaction descriptors — hydrogen bond donor/acceptor atom-pair energies from `jazzy` library; used by auP7s (rank 27)

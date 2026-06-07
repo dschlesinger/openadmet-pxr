@@ -9,6 +9,7 @@ import polars as pl
 
 from representations.chemeleon import ChemeleonFingerprint, FinetunedChemeleonFingerprint
 from representations.chemprop_rep import ChempropFingerprint
+from representations.crystal_similarity import CrystalLigandSimilarity
 from representations.fingerprints import MACCSKeysFingerprint, MorganFingerprint
 from representations.jazzy_descriptors import JazzyDescriptors
 from representations.mole import MolERepresentation
@@ -28,6 +29,7 @@ _finetuned_unimol = FinetunedUniMolRepresentation()
 _mole = MolERepresentation()
 _jazzy = JazzyDescriptors()
 _xtb = XTBDescriptors()
+_crystal_similarity = CrystalLigandSimilarity()
 
 
 def _morgan_features(df: pl.DataFrame) -> np.ndarray:
@@ -74,6 +76,10 @@ def _xtb_features(df: pl.DataFrame) -> np.ndarray:
     return _xtb.transform(df["SMILES"])
 
 
+def _crystal_similarity_features(df: pl.DataFrame) -> np.ndarray:
+    return _crystal_similarity.transform(df["SMILES"])
+
+
 INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     _morgan.name: _morgan_features,
     _maccs.name: _maccs_features,
@@ -86,6 +92,7 @@ INPUT_REGISTRY: dict[str, Callable[[pl.DataFrame], np.ndarray]] = {
     _mole.name: _mole_features,
     _jazzy.name: _jazzy_features,
     _xtb.name: _xtb_features,
+    _crystal_similarity.name: _crystal_similarity_features,
 }
 
 

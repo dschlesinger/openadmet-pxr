@@ -7,6 +7,7 @@ Representation, set a unique `name` class variable, and add it here.
 from representations.base import Representation
 from representations.chemeleon import ChemeleonFingerprint, FinetunedChemeleonFingerprint
 from representations.chemprop_rep import ChempropFingerprint
+from representations.crystal_similarity import CrystalLigandSimilarity
 from representations.fingerprints import MorganFingerprint
 from representations.jazzy_descriptors import JazzyDescriptors
 from representations.mole import MolERepresentation
@@ -26,6 +27,7 @@ REGISTRY: dict[str, type[Representation]] = {
     MolERepresentation.name: MolERepresentation,
     JazzyDescriptors.name: JazzyDescriptors,
     XTBDescriptors.name: XTBDescriptors,
+    CrystalLigandSimilarity.name: CrystalLigandSimilarity,
 }
 
 __all__ = ["Representation", "REGISTRY"]
