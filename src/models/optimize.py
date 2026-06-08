@@ -39,4 +39,27 @@ SEARCH_SPACES: Dict[str, SearchSpace] = {
         "max_epochs": trial.suggest_int("max_epochs", 100, 500, step=100),
         "patience": trial.suggest_int("patience", 10, 50, step=10),
     },
+    "linear_regression": lambda trial: {
+        "alpha": trial.suggest_float("alpha", 1e-3, 1e3, log=True),
+        "fit_intercept": trial.suggest_categorical("fit_intercept", [True, False]),
+        "n_components": trial.suggest_int("n_components", 10, 500, log=True),
+    },
+    "symbolic_regression": lambda trial: {
+        "niterations": trial.suggest_int("niterations", 10, 100),
+        "populations": trial.suggest_int("populations", 5, 50),
+    },
+    "tabicl": lambda trial: {
+        "n_estimators": trial.suggest_int("n_estimators", 1, 32),
+        "pca_components": trial.suggest_int("pca_components", 10, 300, log=True),
+    },
+    "tabpfn": lambda trial: {
+        "n_estimators": trial.suggest_int("n_estimators", 1, 32),
+        "pca_components": trial.suggest_int("pca_components", 10, 300, log=True),
+    },
+    "delta": lambda trial: {
+        "embedding_dim": trial.suggest_int("embedding_dim", 32, 512, log=True),
+        "dropout": trial.suggest_float("dropout", 0.0, 0.5),
+        "epochs": trial.suggest_int("epochs", 20, 150, step=10),
+        "n_pairs_per_epoch": trial.suggest_int("n_pairs_per_epoch", 5_000, 50_000, log=True),
+    },
 }
