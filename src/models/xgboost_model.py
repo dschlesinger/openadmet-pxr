@@ -1,6 +1,6 @@
 """XGBoost regressor for the PXR challenge."""
 
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
 import numpy as np
 from xgboost import XGBRegressor
@@ -28,6 +28,7 @@ class XGBoost(PXRModel):
         subsample: float = DEFAULT_SUBSAMPLE,
         colsample_bytree: float = DEFAULT_COLSAMPLE_BYTREE,
         random_state: Optional[int] = DEFAULT_RANDOM_STATE,
+        **kwargs: Any,
     ) -> None:
         self._model = XGBRegressor(
             n_estimators=n_estimators,
@@ -37,6 +38,7 @@ class XGBoost(PXRModel):
             colsample_bytree=colsample_bytree,
             random_state=random_state,
             verbosity=0,
+            **kwargs,
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> None:
