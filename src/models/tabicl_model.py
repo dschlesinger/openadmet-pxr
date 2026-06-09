@@ -17,7 +17,7 @@ from models.utils import make_pca
 # memory-constrained machines (~4 GB GPU / a few GB host) during predict; 2 keeps
 # the footprint safe with negligible accuracy cost. Mixed precision (use_amp) and
 # pinning to CUDA when available further bound host-RAM use.
-DEFAULT_N_ESTIMATORS = 2
+DEFAULT_N_ESTIMATORS = 8
 DEFAULT_PCA_COMPONENTS = 200
 DEFAULT_BATCH_SIZE = 2
 
