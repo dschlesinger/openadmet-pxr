@@ -8,9 +8,14 @@ import numpy as np
 import polars as pl
 import pytest
 
-from models import REGISTRY, PXRModel
+from pathlib import Path
+
+from models import REGISTRY, META_REGISTRY
 from models.baseline import MeanBaseline, MedianBaseline
 from models.delta_model import DeltaModel
+from models.knn import KNN
+from models.stacked_ensemble import StackedEnsemble
+from models.xgboost_model import XGBoost
 from models.evaluate import (
     _compute_metrics,
     _evaluate_model,
@@ -557,3 +562,59 @@ def test_find_cliff_pairs_detects_obvious_cliff() -> None:
     pairs = DeltaModel()._find_cliff_pairs(X, y)
     assert pairs.shape == (1, 2)
     assert set(pairs[0].tolist()) == {0, 1}
+
+
+# --- StackedEnsemble ---
+
+_STACK_SMILES = [
+    "c1ccccc1",
+    "CCO",
+    "CC(=O)O",
+    "CC",
+    "CCC",
+    "CCCC",
+    "c1ccncc1",
+    "CCN",
+    "CC(C)O",
+    "CCCCO",
+    "CCCC(=O)O",
+    "c1ccc(O)cc1",
+    "CCOCC",
+    "CCCCCC",
+]
+
+
+def _stack_df() -> pl.DataFrame:
+    n = len(_STACK_SMILES)
+    return pl.DataFrame(
+        {
+            "Molecule Name": [f"M{i}" for i in range(n)],
+            "SMILES": _STACK_SMILES,
+            "pEC50": [4.0 + (i % 5) * 0.5 for i in range(n)],
+        }
+    )
+
+
+def _cheap_roster():
+    """A roster using only offline-computable reps/models (no pretrained embeddings)."""
+    return [
+        ("xgb", XGBoost, ["morgan"]),
+        ("knn", KNN, ["morgan"]),
+        ("delta", lambda: DeltaModel(epochs=2, n_pairs_per_epoch=100), ["rdkit"]),
+    ]
+
+
+def test_stacked_ensemble_registered() -> None:
+    assert "stacked_ensemble" in META_REGISTRY
+    assert META_REGISTRY["stacked_ensemble"] is StackedEnsemble
+
+
+def test_stacked_ensemble_fit_predict(tmp_path: object) -> None:
+    cache = Path(str(tmp_path)) / "cache"  # type: ignore[operator]
+    train = _stack_df()
+    test = _stack_df().head(4)
+    model = StackedEnsemble(roster=_cheap_roster(), n_splits=2)
+    model.fit(train, cache)
+    preds = model.predict(test, cache)
+    assert preds.shape == (len(test),)
+    assert np.all(np.isfinite(preds))

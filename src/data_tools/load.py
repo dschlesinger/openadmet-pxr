@@ -28,7 +28,6 @@ _UNBLINDED_COL_MAP: dict[str, str] = {
 }
 
 
-
 def load_train(path: Path = _DEFAULT_DATA_DIR / _TRAIN_FILE) -> pl.DataFrame:
     """Return the training split as a Polars DataFrame."""
     return pl.read_csv(path)
@@ -130,6 +129,61 @@ def _butina_split(
     return df[train_indices], df[val_indices]
 
 
+def butina_kfold_indices(
+    df: pl.DataFrame,
+    n_splits: int = 5,
+    cutoff: float = 0.4,
+    seed: int = 42,
+) -> list[list[int]]:
+    """Return per-fold validation row-index lists via Butina clustering.
+
+    Whole clusters are assigned to a single fold (largest-first round-robin), so
+    structurally similar molecules never span a train/val boundary — the honest
+    grouped CV needed for stacking OOF predictions.
+    """
+    try:
+        from rdkit import DataStructs  # type: ignore[import]
+        from rdkit.Chem import MolFromSmiles  # type: ignore[import]
+        from rdkit.Chem.rdFingerprintGenerator import GetMorganGenerator  # type: ignore[import]
+        from rdkit.ML.Cluster import Butina  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError("rdkit is required for Butina k-fold") from exc
+
+    morgan_gen = GetMorganGenerator(radius=2, fpSize=2048)
+    fps: list[object] = []
+    invalid: list[int] = []
+    for idx, smi in enumerate(df["SMILES"].to_list()):
+        mol = MolFromSmiles(smi)
+        if mol is None:
+            invalid.append(idx)
+            fps.append(None)
+        else:
+            fps.append(morgan_gen.GetFingerprint(mol))
+
+    valid_fps = [fp for fp in fps if fp is not None]
+    valid_indices = [i for i, fp in enumerate(fps) if fp is not None]
+
+    dists: list[float] = []
+    for i in range(1, len(valid_fps)):
+        sims = DataStructs.BulkTanimotoSimilarity(valid_fps[i], valid_fps[:i])
+        dists.extend(1.0 - s for s in sims)
+
+    raw_clusters = Butina.ClusterData(dists, len(valid_fps), cutoff, isDistData=True)
+    clusters: list[list[int]] = [[valid_indices[j] for j in cluster] for cluster in raw_clusters]
+    # Invalid SMILES form singleton groups so every row lands in exactly one fold.
+    clusters.extend([[i] for i in invalid])
+
+    clusters.sort(key=len, reverse=True)
+    random.Random(seed).shuffle(clusters)
+
+    folds: list[list[int]] = [[] for _ in range(n_splits)]
+    # Greedy largest-first assignment to the currently-smallest fold keeps sizes balanced.
+    for cluster in sorted(clusters, key=len, reverse=True):
+        target = min(range(n_splits), key=lambda k: len(folds[k]))
+        folds[target].extend(cluster)
+    return folds
+
+
 def _scaffold_split(
     df: pl.DataFrame,
     val_fraction: float,
@@ -198,9 +252,7 @@ def _assemble_pool(  # pylint: disable=too-many-arguments
 
     if include_single_concentration:
         single = load_single_concentration_train(data_dir / _SINGLE_CONC_TRAIN_FILE)
-        agg = single.group_by("OCNT_ID").agg(
-            pl.col("log2_fc_estimate").median().alias("log2_fc_single")
-        )
+        agg = single.group_by("OCNT_ID").agg(pl.col("log2_fc_estimate").median().alias("log2_fc_single"))
         base = base.join(agg, on="OCNT_ID", how="left")
 
     return base
@@ -233,9 +285,7 @@ def _build_unblinded_val(
         val_df = val_df.join(counter, on="OCNT_ID", how="left")
     if include_single_concentration:
         single = load_single_concentration_train(data_dir / _SINGLE_CONC_TRAIN_FILE)
-        agg = single.group_by("OCNT_ID").agg(
-            pl.col("log2_fc_estimate").median().alias("log2_fc_single")
-        )
+        agg = single.group_by("OCNT_ID").agg(pl.col("log2_fc_estimate").median().alias("log2_fc_single"))
         val_df = val_df.join(agg, on="OCNT_ID", how="left")
 
     return val_df

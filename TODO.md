@@ -20,7 +20,7 @@
 - [x] Pairwise delta model — `delta_model.py::DeltaModel`; Siamese MLP encoder + concat delta head over any representation (dynamic input), L1 loss, activity-cliff pairs (cosine ≥ 0.7, |Δ pEC50| ≥ 1.0) oversampled 3×, k=10 antisymmetric cosine-kNN anchoring, abstains (outputs 0) when < 5 neighbors within cutoff. Adapts ldbc1999 (rank 65): D-MPNN→MLP encoder, Tanimoto→cosine. Built as an ensemble component (standalone Spearman was −0.071 because 90.8% of test had no near neighbor; the abstention gate + downstream stacker absorb out-of-coverage compounds)
 
 ## Ensemble / Stacking
-- [ ] Ridge or ElasticNetCV meta-learner on OOF predictions — replace simple average in `OneofEachDim`; fit stacker on out-of-fold preds only
+- [x] Ridge or ElasticNetCV meta-learner on OOF predictions — `stacked_ensemble.py::StackedEnsemble` (MetaModel); ElasticNetCV on Butina grouped-K-fold OOF + uncertainty meta-features (Tanimoto NN sim, base-model disagreement, delta coverage flag). Replaced `OneofEachDim`/`PXRPreConfigModel` with the `MetaModel`/`META_REGISTRY` interface
 - [ ] NNLS stacking for large candidate pools — non-negative weights, automatically zeros out redundant models
 - [ ] Uncertainty meta-features in stacker: Tanimoto NN distance to train, overall model disagreement, Chemprop protocol disagreement
 
