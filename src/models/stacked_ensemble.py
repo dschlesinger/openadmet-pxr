@@ -149,6 +149,16 @@ class StackedEnsemble(MetaModel):
         )
         print(f"[stacked_ensemble] saved OOF predictions to {oof_path}")
 
+        # Refit each base learner on the full training set so predict() has a model
+        # to call on unseen rows (separate from the OOF predictions saved above).
+        self._fitted = []
+        for label, factory, _ in self._roster:
+            model = factory()
+            j = len(self._fitted)
+            model.fit(mats[j], y)
+            self._fitted.append(model)
+            print(f"[stacked_ensemble] refit {label} on full train ({n} rows)")
+
         # Fit the ElasticNetCV meta-learner on OOF + meta-features only.
         Z = self._meta_features(oof, nn_sim)
         self._meta = Pipeline(

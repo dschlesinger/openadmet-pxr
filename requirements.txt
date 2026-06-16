@@ -23,4 +23,4 @@ jazzy
 
 # For gpu only
 # Move to seperate file later
-cuml-cu12
+# cuml-cu12

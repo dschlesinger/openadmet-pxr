@@ -6,12 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Dict
 
-import numpy as np
 import optuna
 import polars as pl
 from optuna.trial import FixedTrial
 
+from data_tools.filters import FILTER_REGISTRY, apply_filter
 from data_tools.inputs import INPUT_REGISTRY, featurize
+from data_tools.load import load_data
 from models import REGISTRY
 from models.evaluate import _evaluate_model
 from models.optimize import SEARCH_SPACES
@@ -27,18 +28,6 @@ def _make_callback(metric: str) -> Callable:
     return _cb
 
 
-def _build_split(
-    train_df: pl.DataFrame, args: argparse.Namespace
-) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Return (train_df, val_df), falling back to a random split if val CSV is missing."""
-    if args.val_path.exists():
-        return train_df, pl.read_csv(args.val_path)
-    rng = np.random.default_rng(args.seed)
-    idx = rng.permutation(len(train_df))
-    n_val = int(len(train_df) * args.val_split)
-    return train_df[idx[n_val:].tolist()], train_df[idx[:n_val].tolist()]
-
-
 def main() -> None:
     """Entry point for the tune-model CLI."""
     parser = argparse.ArgumentParser(description="Tune a PXR model with Optuna TPE search.")
@@ -47,10 +36,9 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=None, help="Stop after N seconds regardless of trial count")
     parser.add_argument("--metric", default="RMSE", choices=["RMSE", "MAE", "R2"], help="Metric to optimize")
     parser.add_argument("--output", type=Path, default=None, help="Write best params + metrics to JSON")
-    parser.add_argument("--train-path", default="data/train_split.csv", help="Training CSV path")
-    parser.add_argument("--val-path", type=Path, default=Path("data/val_split.csv"), help="Validation CSV path")
-    parser.add_argument("--val-split", type=float, default=0.2, help="Fallback val fraction if --val-path missing")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for sampler and fallback split")
+    parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Directory containing data CSVs")
+    parser.add_argument("--val-split", type=float, default=0.2, help="Val fraction for scaffold/butina split")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for sampler and data split")
     parser.add_argument("--target", default="pEC50", help="Target column")
     parser.add_argument(
         "--input",
@@ -59,7 +47,49 @@ def main() -> None:
         help=f"Input featurization(s) to use (hstacked if multiple). Available: {list(INPUT_REGISTRY.keys())}",
     )
     parser.add_argument("--cache-dir", default="data/features", help="Feature cache directory")
+    parser.add_argument(
+        "--scaffold-split",
+        action="store_true",
+        help="Use scaffold-based train/val split (no scaffold leakage).",
+    )
+    parser.add_argument(
+        "--butina-split",
+        action="store_true",
+        help="Use Butina cluster split on Morgan fps (no similar molecules span both splits).",
+    )
+    parser.add_argument(
+        "--butina-cutoff",
+        type=float,
+        default=0.4,
+        help="Tanimoto distance cutoff for Butina clustering (default: 0.4).",
+    )
+    parser.add_argument(
+        "--include-unblinded",
+        action="store_true",
+        help="Add phase-1 unblinded test molecules to the training pool.",
+    )
+    parser.add_argument(
+        "--include-counter-assay",
+        action="store_true",
+        help="Add pEC50_counter column from counter-assay data.",
+    )
+    parser.add_argument(
+        "--include-single-conc",
+        action="store_true",
+        help="Add log2_fc_single column from single-concentration screen.",
+    )
+    parser.add_argument(
+        "--filter",
+        default=None,
+        choices=list(FILTER_REGISTRY.keys()),
+        help="Training data filter to apply before fitting. Available: " + str(list(FILTER_REGISTRY.keys())),
+    )
+    parser.add_argument("--test-path", default="data/test.csv", help="Test CSV used when --filter is set")
     args = parser.parse_args()
+
+    if (args.scaffold_split or args.butina_split) and not 0.0 < args.val_split < 1.0:
+        print(f"--val-split must be in (0, 1), got {args.val_split}", file=sys.stderr)
+        sys.exit(1)
 
     unknown_inputs = [n for n in args.input if n not in INPUT_REGISTRY]
     if unknown_inputs:
@@ -68,8 +98,35 @@ def main() -> None:
 
     model_cls = REGISTRY[args.model]
     cache_dir = Path(args.cache_dir)
-    raw_train = pl.read_csv(args.train_path)
-    train_df, val_df = _build_split(raw_train, args)
+
+    if args.scaffold_split:
+        split_type = "scaffold"
+    elif args.butina_split:
+        split_type = "butina"
+    else:
+        split_type = "unblinded"
+    train_df, val_df = load_data(
+        include_unblinded=args.include_unblinded,
+        include_counter_assay=args.include_counter_assay,
+        include_single_concentration=args.include_single_conc,
+        split_type=split_type,
+        val_fraction=args.val_split,
+        seed=args.seed,
+        butina_cutoff=args.butina_cutoff,
+        data_dir=args.data_dir,
+    )
+    print(
+        f"load_data(split_type={split_type!r}): {len(val_df)} val / {len(train_df)} train molecules",
+        file=sys.stderr,
+    )
+
+    if args.target not in train_df.columns:
+        print(f"Target '{args.target}' not found. Columns: {list(train_df.columns)}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.filter:
+        test_df = pl.read_csv(args.test_path)
+        train_df = apply_filter(train_df, test_df, args.filter, cache_dir)
 
     X_train, y_train = drop_nan_rows(featurize(train_df, args.input, cache_dir), train_df[args.target].to_numpy())
     X_val, y_val = drop_nan_rows(featurize(val_df, args.input, cache_dir), val_df[args.target].to_numpy())
