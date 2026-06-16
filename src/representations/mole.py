@@ -18,7 +18,7 @@ import polars as pl
 from representations.base import Representation
 
 _MOLE_DIR = Path(__file__).parents[2] / "third_party" / "mole"
-_MOLE_CONDA_ENV = "mole"
+_MOLE_CONDA_ENV = "moleß"  # actual local conda env name (intentional, not a typo)
 _DEFAULT_REPRESENTATION = "gin_concat_R1000_E8000_lambda0.0001"
 _ZENODO_MODEL_URL = "https://zenodo.org/api/records/10803099/files/model.pth/content"
 
