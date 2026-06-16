@@ -137,6 +137,18 @@ class StackedEnsemble(MetaModel):
                 oof[val, j] = model.predict(mats[j][val])
             print(f"[stacked_ensemble] OOF fold {f + 1}/{self._n_splits} done ({val.size} val rows)")
 
+        # Persist OOF predictions + meta-features for offline meta-learner tuning (e.g. Optuna).
+        oof_path = Path("results/stacked_ensemble_oof.npz")
+        oof_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(
+            oof_path,
+            oof=oof,
+            y=y,
+            nn_sim=nn_sim,
+            labels=np.array([lab for lab, _, _ in self._roster]),
+        )
+        print(f"[stacked_ensemble] saved OOF predictions to {oof_path}")
+
         # Fit the ElasticNetCV meta-learner on OOF + meta-features only.
         Z = self._meta_features(oof, nn_sim)
         self._meta = Pipeline(
@@ -147,13 +159,6 @@ class StackedEnsemble(MetaModel):
         )
         self._meta.fit(Z, y)
         self._report_weights()
-
-        # Refit each base learner on the full training set for inference.
-        self._fitted = []
-        for j, (label, factory, _) in enumerate(self._roster):
-            model = factory()
-            model.fit(mats[j], y)
-            self._fitted.append(model)
 
     def _report_weights(self) -> None:
         """Print meta-learner coefficients (base learners + meta-features)."""
