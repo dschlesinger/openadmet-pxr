@@ -53,6 +53,7 @@ generate-results = "models.predict:main"
 validate-results = "data_tools.validate_submission:main"
 score-table = "models.score_table:main"
 tune-model = "models.tune:main"
+tune-stack = "models.tune_stack:main"
 cross-table = "models.cross_table:main"
 visualize-space = "data_tools.visualize_space:main"
 

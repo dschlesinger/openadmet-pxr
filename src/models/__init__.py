@@ -8,6 +8,7 @@ from models.base import MetaModel, PXRModel
 from models.baseline import MeanBaseline, MedianBaseline
 from models.decision_tree import DecisionTree
 from models.delta_model import DeltaModel
+from models.elasticnet_cv import ElasticNetCVModel
 from models.knn import KNN
 from models.linear_regression import LinearRegression
 from models.mlp import MLP
@@ -30,6 +31,7 @@ REGISTRY: dict[str, type[PXRModel]] = {
     # KAN.name: KAN,
     XGBoost.name: XGBoost,
     DeltaModel.name: DeltaModel,
+    ElasticNetCVModel.name: ElasticNetCVModel,
 }
 
 # DataFrame-aware meta-models (manage their own featurization + internal CV).

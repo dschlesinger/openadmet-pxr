@@ -32,8 +32,7 @@ SEARCH_SPACES: Dict[str, SearchSpace] = {
     },
     "mlp": lambda trial: {
         "hidden_dims": tuple(
-            trial.suggest_int(f"layer_{i}", 32, 512, log=True)
-            for i in range(trial.suggest_int("n_layers", 1, 4))
+            trial.suggest_int(f"layer_{i}", 32, 512, log=True) for i in range(trial.suggest_int("n_layers", 1, 4))
         ),
         "dropout": trial.suggest_float("dropout", 0.0, 0.5),
         "max_epochs": trial.suggest_int("max_epochs", 100, 500, step=100),
@@ -43,6 +42,12 @@ SEARCH_SPACES: Dict[str, SearchSpace] = {
         "alpha": trial.suggest_float("alpha", 1e-3, 1e3, log=True),
         "fit_intercept": trial.suggest_categorical("fit_intercept", [True, False]),
         "n_components": trial.suggest_int("n_components", 10, 500, log=True),
+    },
+    "elasticnet_cv": lambda trial: {
+        # ElasticNetCV cross-validates alpha internally; Optuna tunes the L1/L2 mix + path.
+        "l1_ratio": trial.suggest_float("l1_ratio", 0.01, 1.0),
+        "n_alphas": trial.suggest_int("n_alphas", 50, 300),
+        "cv": trial.suggest_int("cv", 3, 10),
     },
     "symbolic_regression": lambda trial: {
         "niterations": trial.suggest_int("niterations", 10, 100),
