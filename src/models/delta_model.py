@@ -45,6 +45,7 @@ K_NEIGHBORS = 10
 SIM_CUTOFF = 0.7
 MIN_NEIGHBORS = 5
 DELTA_THRESHOLD = 1.0
+CLIFF_TOP_FRACTION = 0.1
 SNAPSHOT_EPOCHS = 5
 SEED = 42
 _SIM_BLOCK = 1024  # row block size for batched cosine to bound memory
@@ -119,7 +120,8 @@ class DeltaModel(PXRModel):
     # ------------------------------------------------------------------
 
     def _find_cliff_pairs(self, X: np.ndarray, y: np.ndarray) -> np.ndarray:
-        """Return (n_cliff, 2) upper-triangle indices of activity-cliff pairs."""
+        """Return (n_cliff, 2) upper-triangle indices of the top CLIFF_TOP_FRACTION
+        activity-cliff pairs (by |delta y|, among those passing SIM_CUTOFF/DELTA_THRESHOLD)."""
         n = len(y)
         rows: list[int] = []
         cols: list[int] = []
@@ -136,7 +138,12 @@ class DeltaModel(PXRModel):
                 cols.extend(cand.tolist())
         if not rows:
             return np.empty((0, 2), dtype=np.int64)
-        return np.column_stack([rows, cols]).astype(np.int64)
+        rows_arr = np.asarray(rows, dtype=np.int64)
+        cols_arr = np.asarray(cols, dtype=np.int64)
+        abs_delta = np.abs(y[rows_arr] - y[cols_arr])
+        n_keep = max(1, int(len(rows_arr) * CLIFF_TOP_FRACTION))
+        top = np.argpartition(-abs_delta, n_keep - 1)[:n_keep]
+        return np.column_stack([rows_arr[top], cols_arr[top]]).astype(np.int64)
 
     def _sample_pairs(self, n: int, rng: np.random.Generator, cliff_pairs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Sample ordered (i, j) pairs for one epoch, oversampling cliff pairs."""
